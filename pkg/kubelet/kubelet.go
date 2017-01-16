@@ -165,6 +165,7 @@ type SyncHandler interface {
 type Option func(*Kubelet)
 
 // bootstrapping interface for kubelet, targets the initialization protocol
+//kubelet如何进行自举?这个接口负责的是启动kubelet?
 type KubeletBootstrap interface {
 	GetConfiguration() componentconfig.KubeletConfiguration
 	BirthCry()
@@ -176,9 +177,10 @@ type KubeletBootstrap interface {
 }
 
 // create and initialize a Kubelet instance
+//返回一个Interface??
 type KubeletBuilder func(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *KubeletDeps, standaloneMode bool) (KubeletBootstrap, error)
 
-// KubeletDeps is a bin for things we might consider "injected dependencies" -- objects constructed
+// KubeletDeps is a bin for things we might consider "injected注入的 dependencies" -- objects constructed
 // at runtime that are necessary for running the Kubelet. This is a temporary solution for grouping
 // these objects while we figure out a more comprehensive dependency injection story for the Kubelet.
 type KubeletDeps struct {
