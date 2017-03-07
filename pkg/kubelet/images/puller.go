@@ -36,14 +36,16 @@ type imagePuller interface {
 var _, _ imagePuller = &parallelImagePuller{}, &serialImagePuller{}
 
 type parallelImagePuller struct {
-	imageService kubecontainer.ImageService
+	imageService kubecontainer.ImageService //容器镜像操作接口,所以强制拉取镜像的策略在这个接口中实现?
 }
 
+//并行镜像拉取
 func newParallelImagePuller(imageService kubecontainer.ImageService) imagePuller {
 	return &parallelImagePuller{imageService}
 }
 
 func (pip *parallelImagePuller) pullImage(spec kubecontainer.ImageSpec, pullSecrets []v1.Secret, pullChan chan<- pullResult) {
+	//异步拉取镜像
 	go func() {
 		imageRef, err := pip.imageService.PullImage(spec, pullSecrets)
 		pullChan <- pullResult{
@@ -63,7 +65,7 @@ type serialImagePuller struct {
 
 func newSerialImagePuller(imageService kubecontainer.ImageService) imagePuller {
 	imagePuller := &serialImagePuller{imageService, make(chan *imagePullRequest, maxImagePullRequests)}
-	go wait.Until(imagePuller.processImagePullRequests, time.Second, wait.NeverStop)
+	go wait.Until(imagePuller.processImagePullRequests, time.Second, wait.NeverStop) //启动并程,每秒执行processImagePullRequests
 	return imagePuller
 }
 
@@ -81,8 +83,9 @@ func (sip *serialImagePuller) pullImage(spec kubecontainer.ImageSpec, pullSecret
 	}
 }
 
+//读取镜像请求通道中的镜像请求,逐一进行镜像拉取
 func (sip *serialImagePuller) processImagePullRequests() {
-	for pullRequest := range sip.pullRequests {
+	for pullRequest := range sip.pullRequests { //遍历等待中的镜像拉取请求
 		imageRef, err := sip.imageService.PullImage(pullRequest.spec, pullRequest.pullSecrets)
 		pullRequest.pullChan <- pullResult{
 			imageRef: imageRef,

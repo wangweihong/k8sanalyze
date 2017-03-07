@@ -20,6 +20,7 @@ import "k8s.io/kubernetes/pkg/api/v1"
 
 // PodAdmitAttributes is the context for a pod admission decision.
 // The member fields of this struct should never be mutated.
+//这个属性有什么作用?用于pod接受决议
 type PodAdmitAttributes struct {
 	// the pod to evaluate for admission
 	Pod *v1.Pod
@@ -28,6 +29,7 @@ type PodAdmitAttributes struct {
 }
 
 // PodAdmitResult provides the result of a pod admission decision.
+//pod接收的决定结果
 type PodAdmitResult struct {
 	// if true, the pod should be admitted.
 	Admit bool
@@ -64,6 +66,7 @@ type PodSyncLoopTarget interface {
 }
 
 // ShouldEvictResponse provides the result of a should evict request.
+//应当退让回应
 type ShouldEvictResponse struct {
 	// if true, the pod should be evicted.
 	Evict bool
@@ -98,6 +101,7 @@ type PodLifecycleTarget interface {
 }
 
 // PodAdmitHandlers maintains a list of handlers to pod admission.
+//用于决策当前Pod是否进入当前kubelet的控制器吗?
 type PodAdmitHandlers []PodAdmitHandler
 
 // AddPodAdmitHandler adds the specified observer.

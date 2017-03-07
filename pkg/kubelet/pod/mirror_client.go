@@ -49,17 +49,20 @@ func NewBasicMirrorClient(apiserverClient clientset.Interface) MirrorClient {
 	return &basicMirrorClient{apiserverClient: apiserverClient}
 }
 
+//根据指定pod,向apiserver申请创建mirrorpod
 func (mc *basicMirrorClient) CreateMirrorPod(pod *v1.Pod) error {
 	if mc.apiserverClient == nil {
 		return nil
 	}
 	// Make a copy of the pod.
+	//从这里来看,结构体之间的复制,并不包括其中map/slice的赋值, map和slice指向的是同一块内存对象
 	copyPod := *pod
 	copyPod.Annotations = make(map[string]string)
 
 	for k, v := range pod.Annotations {
 		copyPod.Annotations[k] = v
 	}
+	//获取静态
 	hash := getPodHash(pod)
 	copyPod.Annotations[kubetypes.ConfigMirrorAnnotationKey] = hash
 	apiPod, err := mc.apiserverClient.Core().Pods(copyPod.Namespace).Create(&copyPod)
@@ -72,6 +75,7 @@ func (mc *basicMirrorClient) CreateMirrorPod(pod *v1.Pod) error {
 	return err
 }
 
+//删除Mirror pod
 func (mc *basicMirrorClient) DeleteMirrorPod(podFullName string) error {
 	if mc.apiserverClient == nil {
 		return nil
@@ -89,11 +93,13 @@ func (mc *basicMirrorClient) DeleteMirrorPod(podFullName string) error {
 	return nil
 }
 
+//判断静态pod, 1:设置kubernetes.io/config.source,2,而且该source不能是apiserver
 func IsStaticPod(pod *v1.Pod) bool {
 	source, err := kubetypes.GetPodSource(pod)
 	return err == nil && source != kubetypes.ApiserverSource
 }
 
+//判断pod是否是mirror pod
 func IsMirrorPod(pod *v1.Pod) bool {
 	_, ok := pod.Annotations[kubetypes.ConfigMirrorAnnotationKey]
 	return ok

@@ -459,6 +459,7 @@ func ExpandPathsToFileVisitors(mapper *Mapper, paths string, recursive bool, ext
 			return nil
 		}
 
+		//返回一个vistor
 		visitor := &FileVisitor{
 			Path:          path,
 			StreamVisitor: NewStreamVisitor(nil, mapper, path, schema),
@@ -507,7 +508,7 @@ func (v *FileVisitor) Visit(fn VisitorFunc) error {
 // a stream decoder method on runtime.Codec to properly handle this.
 type StreamVisitor struct {
 	io.Reader
-	*Mapper
+	*Mapper //这个的作用?
 
 	Source string
 	Schema validation.Schema
@@ -525,9 +526,11 @@ func NewStreamVisitor(r io.Reader, mapper *Mapper, source string, schema validat
 
 // Visit implements Visitor over a stream. StreamVisitor is able to distinct multiple resources in one stream.
 func (v *StreamVisitor) Visit(fn VisitorFunc) error {
+	//创建一个解析器来解析传递过来的数据流
 	d := yaml.NewYAMLOrJSONDecoder(v.Reader, 4096)
 	for {
 		ext := runtime.RawExtension{}
+		//将数据转换成指定的对象
 		if err := d.Decode(&ext); err != nil {
 			if err == io.EOF {
 				return nil

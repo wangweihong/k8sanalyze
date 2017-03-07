@@ -34,7 +34,9 @@ import (
 // or returns an error. If the document appears to be JSON the
 // YAML decoding path is not used (so that error messages are
 // JSON specific).
+//这里是将yaml文档转换成Json格式
 func ToJSON(data []byte) ([]byte, error) {
+	//如果数据流是Json,直接返回
 	if hasJSONPrefix(data) {
 		return data, nil
 	}
@@ -91,6 +93,7 @@ type YAMLDecoder struct {
 // the YAML spec) into its own chunk. io.ErrShortBuffer will be
 // returned if the entire buffer could not be read to assist
 // the caller in framing the chunk.
+// 该对象将会对字节流做"\n---"切割,每次读只读其中一部分
 func NewDocumentDecoder(r io.ReadCloser) io.ReadCloser {
 	scanner := bufio.NewScanner(r)
 	scanner.Split(splitYAMLDocument)
@@ -103,6 +106,7 @@ func NewDocumentDecoder(r io.ReadCloser) io.ReadCloser {
 // Read reads the previous slice into the buffer, or attempts to read
 // the next chunk.
 // TODO: switch to readline approach.
+//实现了io包的Reader接口
 func (d *YAMLDecoder) Read(data []byte) (n int, err error) {
 	left := len(d.remaining)
 	if left == 0 {
@@ -145,9 +149,11 @@ func splitYAMLDocument(data []byte, atEOF bool) (advance int, token []byte, err 
 		return 0, nil, nil
 	}
 	sep := len([]byte(yamlSeparator))
+	//找到分隔符的位置,
 	if i := bytes.Index(data, []byte(yamlSeparator)); i >= 0 {
 		// We have a potential document terminator
 		i += sep
+		//分隔符后面的数据
 		after := data[i:]
 		if len(after) == 0 {
 			// we can't read any more characters
@@ -156,6 +162,7 @@ func splitYAMLDocument(data []byte, atEOF bool) (advance int, token []byte, err 
 			}
 			return 0, nil, nil
 		}
+		//获取切割后部分数据的换行符
 		if j := bytes.IndexByte(after, '\n'); j >= 0 {
 			return i + j + 1, data[0 : i-sep], nil
 		}
@@ -232,6 +239,7 @@ func (d *YAMLOrJSONDecoder) Decode(into interface{}) error {
 	return err
 }
 
+//
 type Reader interface {
 	Read() ([]byte, error)
 }
@@ -247,6 +255,7 @@ func NewYAMLReader(r *bufio.Reader) *YAMLReader {
 }
 
 // Read returns a full YAML document.
+//实现了Reader接口
 func (r *YAMLReader) Read() ([]byte, error) {
 	var buffer bytes.Buffer
 	for {
@@ -280,6 +289,7 @@ func (r *YAMLReader) Read() ([]byte, error) {
 	}
 }
 
+// 实现了Reader接口
 type LineReader struct {
 	reader *bufio.Reader
 }

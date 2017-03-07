@@ -87,7 +87,7 @@ func SortInitContainerStatuses(p *v1.Pod, statuses []v1.ContainerStatus) {
 // Reservation represents reserved resources for non-pod components.
 type Reservation struct {
 	// System represents resources reserved for non-kubernetes components.
-	System v1.ResourceList
+	System v1.ResourceList //记录非k8s相关组件的资源数量
 	// Kubernetes represents resources reserved for kubernetes system components.
-	Kubernetes v1.ResourceList
+	Kubernetes v1.ResourceList //记录k8s相关组件的资源数量
 }

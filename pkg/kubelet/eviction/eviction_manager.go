@@ -50,6 +50,7 @@ type managerImpl struct {
 	// protects access to internal state
 	sync.RWMutex
 	// node conditions are the set of conditions present
+	//用来决策Pod是否接受
 	nodeConditions []v1.NodeConditionType
 	// captures when a node condition was last observed based on a threshold being met
 	nodeConditionsLastObservedAt nodeConditionsObservedAt
@@ -100,14 +101,19 @@ func NewManager(
 }
 
 // Admit rejects a pod if its not safe to admit for node stability.
+//attrs包含需要判定的pod,以及Kubelet已有的pod?
+//返回值是判定决策结果
 func (m *managerImpl) Admit(attrs *lifecycle.PodAdmitAttributes) lifecycle.PodAdmitResult {
 	m.RLock()
 	defer m.RUnlock()
+	//如果节点的有效条件为空,则允许pod进入
 	if len(m.nodeConditions) == 0 {
 		return lifecycle.PodAdmitResult{Admit: true}
 	}
 
 	// the node has memory pressure, admit if not best-effort
+	//如果kubelet正处于内存压力,判定pod的Qos是否是BestEffort,如果是则直接判定失败(OOM情况下,BestEffort的Pod会被杀死以释放内存)
+	//如果pod没有
 	if hasNodeCondition(m.nodeConditions, v1.NodeMemoryPressure) {
 		notBestEffort := qos.BestEffort != qos.GetPodQOS(attrs.Pod)
 		if notBestEffort || kubetypes.IsCriticalPod(attrs.Pod) {

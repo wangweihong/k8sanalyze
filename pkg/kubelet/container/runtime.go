@@ -144,6 +144,7 @@ type IndirectStreamingRuntime interface {
 	GetPortForward(podName, podNamespace string, podUID types.UID) (*url.URL, error)
 }
 
+//镜像拉取的实际动作,这个的实现在kubelet.go
 type ImageService interface {
 	// PullImage pulls an image from the network to local storage using the supplied
 	// secrets if necessary. It returns a reference (digest or ID) to the pulled image.
@@ -170,6 +171,7 @@ type ContainerCommandRunner interface {
 }
 
 // Pod is a group of containers.
+//这里是kubelet对pod的描述?
 type Pod struct {
 	// The ID of the pod, which can be used to retrieve a particular pod
 	// from the pod list returned by GetPods().

@@ -25,15 +25,16 @@ import (
 )
 
 type backoffEntry struct {
-	backoff    time.Duration
-	lastUpdate time.Time
+	backoff    time.Duration //补偿时间段?
+	lastUpdate time.Time     //最后更新时间
 }
 
+//这个补偿/退让对象的作用?
 type Backoff struct {
 	sync.Mutex
 	Clock           clock.Clock
-	defaultDuration time.Duration
-	maxDuration     time.Duration
+	defaultDuration time.Duration //默认时间段
+	maxDuration     time.Duration //最大时间段
 	perItemBackoff  map[string]*backoffEntry
 }
 

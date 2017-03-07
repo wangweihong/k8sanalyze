@@ -102,6 +102,7 @@ func (p *PodSyncResult) AddSyncResult(result ...*SyncResult) {
 }
 
 // AddPodSyncResult merges a PodSyncResult to current one
+//合并一个pod同步结果
 func (p *PodSyncResult) AddPodSyncResult(result PodSyncResult) {
 	p.AddSyncResult(result.SyncResults...)
 	p.SyncError = result.SyncError

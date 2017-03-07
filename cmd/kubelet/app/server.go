@@ -112,6 +112,7 @@ HTTP server: The kubelet can also listen for HTTP and respond to a simple API
 
 // UnsecuredKubeletDeps returns a KubeletDeps suitable for being run, or an error if the server setup
 // is not valid.  It will not start any background processes, and does not include authentication/authorization
+//创建一个kubeletDeps,
 func UnsecuredKubeletDeps(s *options.KubeletServer) (*kubelet.KubeletDeps, error) {
 
 	// Initialize the TLS Options
@@ -153,6 +154,7 @@ func UnsecuredKubeletDeps(s *options.KubeletServer) (*kubelet.KubeletDeps, error
 	}, nil
 }
 
+//通过配置,创建一个k8s client
 func getKubeClient(s *options.KubeletServer) (*clientset.Clientset, error) {
 	clientConfig, err := CreateAPIServerClientConfig(s)
 	if err == nil {
@@ -269,6 +271,8 @@ func initKubeletConfigSync(s *options.KubeletServer) (*componentconfig.KubeletCo
 // The kubeDeps argument may be nil - if so, it is initialized from the settings on KubeletServer.
 // Otherwise, the caller is assumed to have set up the KubeletDeps object and a default one will
 // not be generated.
+//??Kubelet应用程序默认KubeDeps为nil??在什么情况下, KubeletDeps对象才不为空, 如何建立KubeletDeps对象?
+//这个对象包行Kube client等,如果为空, 会有什么影响?
 func Run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) error {
 	if err := run(s, kubeDeps); err != nil {
 		return fmt.Errorf("failed to run Kubelet: %v", err)
@@ -309,8 +313,9 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 	if s.ExitOnLockContention && s.LockFilePath == "" {
 		return errors.New("cannot exit on lock file contention: no lock file specified")
 	}
-
+	//done channel用于保证run函数不退出
 	done := make(chan struct{})
+	//这个锁的作用是保证kubelet的唯一?
 	if s.LockFilePath != "" {
 		glog.Infof("acquiring file lock on %q", s.LockFilePath)
 		if err := flock.Acquire(s.LockFilePath); err != nil {
@@ -325,6 +330,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 	}
 
 	// Set feature gates based on the value in KubeletConfiguration
+	//特性门?
 	err = utilconfig.DefaultFeatureGate.Set(s.KubeletConfiguration.FeatureGates)
 	if err != nil {
 		return err
@@ -357,6 +363,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 		}
 	}
 
+	//如果kubedeps为空,默认kubelet就是这种情况
 	if kubeDeps == nil {
 		var kubeClient, eventClient *clientset.Clientset
 		var cloud cloudprovider.Interface
@@ -373,6 +380,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 			}
 		}
 
+		//自举配置?
 		if s.BootstrapKubeconfig != "" {
 			nodeName, err := getNodeName(cloud, nodeutil.GetHostname(s.HostnameOverride))
 			if err != nil {
@@ -383,6 +391,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 			}
 		}
 
+		//kube client配置?
 		clientConfig, err := CreateAPIServerClientConfig(s)
 		if err == nil {
 			kubeClient, err = clientset.NewForConfig(clientConfig)
@@ -406,12 +415,14 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 			}
 		}
 
+		//创建kubeletDeps,其中初始化docker client
 		kubeDeps, err = UnsecuredKubeletDeps(s)
 		if err != nil {
 			return err
 		}
 
 		kubeDeps.Cloud = cloud
+		//k8s client
 		kubeDeps.KubeClient = kubeClient
 		kubeDeps.EventClient = eventClient
 	}
@@ -428,6 +439,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 		kubeDeps.Auth = auth
 	}
 
+	//初始化k8s cadvisor接口
 	if kubeDeps.CAdvisorInterface == nil {
 		kubeDeps.CAdvisorInterface, err = cadvisor.New(uint(s.CAdvisorPort), s.ContainerRuntime, s.RootDirectory)
 		if err != nil {
@@ -435,10 +447,12 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 		}
 	}
 
+	//容器管理器,这个容器管理器并没有包含太多和容器相关的动作,比如说停止/删除容器等动作都没有
 	if kubeDeps.ContainerManager == nil {
 		if s.SystemCgroups != "" && s.CgroupRoot == "" {
 			return fmt.Errorf("invalid configuration: system container was specified and cgroup root was not specified")
 		}
+		//创建容器管理器,其中和Cgroup有很大的关联
 		kubeDeps.ContainerManager, err = cm.NewContainerManager(
 			kubeDeps.Mounter,
 			kubeDeps.CAdvisorInterface,
@@ -451,7 +465,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 				CgroupRoot:            s.CgroupRoot,
 				CgroupDriver:          s.CgroupDriver,
 				ProtectKernelDefaults: s.ProtectKernelDefaults,
-				EnableCRI:             s.EnableCRI,
+				EnableCRI:             s.EnableCRI, //是否启动Container Runtime Interface
 			},
 			s.ExperimentalFailSwapOn)
 
@@ -460,6 +474,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 		}
 	}
 
+	//检测当前用户的权限
 	if err := checkPermissions(); err != nil {
 		glog.Error(err)
 	}
@@ -469,6 +484,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	// TODO(vmarmol): Do this through container config.
+	//这个用来调整Kubelet的OOM score,以免其被OOM杀死?
 	oomAdjuster := kubeDeps.OOMAdjuster
 	if err := oomAdjuster.ApplyOOMScoreAdj(0, int(s.OOMScoreAdj)); err != nil {
 		glog.Warning(err)
@@ -662,6 +678,7 @@ func addChaosToClientConfig(s *options.KubeletServer, config *restclient.Config)
 //   3 Standalone 'kubernetes' binary
 // Eventually, #2 will be replaced with instances of #3
 func RunKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet.KubeletDeps, runOnce bool, standaloneMode bool) error {
+	//设置主机名为HostnameOverride,为空的话通过内核获取当前的主机名
 	hostname := nodeutil.GetHostname(kubeCfg.HostnameOverride)
 	// Query the cloud provider for our node name, default to hostname if kcfg.Cloud == nil
 	nodeName, err := getNodeName(kubeDeps.Cloud, hostname)
@@ -669,9 +686,11 @@ func RunKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet
 		return err
 	}
 
+	//事件广播器,广播kubelet的事件?
 	eventBroadcaster := record.NewBroadcaster()
 	kubeDeps.Recorder = eventBroadcaster.NewRecorder(v1.EventSource{Component: "kubelet", Host: string(nodeName)})
 	eventBroadcaster.StartLogging(glog.V(3).Infof)
+	//??这里会发送kubelet的事件给apiserver?,这个EventClient是一个k8sClient
 	if kubeDeps.EventClient != nil {
 		glog.V(4).Infof("Sending events to api server.")
 		eventBroadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: kubeDeps.EventClient.Events("")})
@@ -709,6 +728,7 @@ func RunKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet
 	credentialprovider.SetPreferredDockercfgPath(kubeCfg.RootDirectory)
 	glog.V(2).Infof("Using root directory: %v", kubeCfg.RootDirectory)
 
+	//kubelet的构建函数,如果为空,则使用CreateAndInitKubelet做Build
 	builder := kubeDeps.Builder
 	if builder == nil {
 		builder = CreateAndInitKubelet
@@ -716,6 +736,7 @@ func RunKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet
 	if kubeDeps.OSInterface == nil {
 		kubeDeps.OSInterface = kubecontainer.RealOS{}
 	}
+	//创建kubelet对象
 	k, err := builder(kubeCfg, kubeDeps, standaloneMode)
 	if err != nil {
 		return fmt.Errorf("failed to create kubelet: %v", err)
@@ -784,6 +805,7 @@ func startKubelet(k kubelet.KubeletBootstrap, podCfg *config.PodConfig, kubeCfg 
 	go wait.Until(func() { k.Run(podCfg.Updates()) }, 0, wait.NeverStop)
 
 	// start the kubelet server
+	//这里是启动Http服务
 	if kubeCfg.EnableServer {
 		go wait.Until(func() {
 			k.ListenAndServe(net.ParseIP(kubeCfg.Address), uint(kubeCfg.Port), kubeDeps.TLSOptions, kubeDeps.Auth, kubeCfg.EnableDebuggingHandlers)
@@ -796,10 +818,12 @@ func startKubelet(k kubelet.KubeletBootstrap, podCfg *config.PodConfig, kubeCfg 
 	}
 }
 
+//创建kubelet对象,这时候kubelet运行没有?
 func CreateAndInitKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet.KubeletDeps, standaloneMode bool) (k kubelet.KubeletBootstrap, err error) {
 	// TODO: block until all sources have delivered at least one update to the channel, or break the sync loop
 	// up into "per source" synchronizations
 
+	//创建kubelet对象
 	k, err = kubelet.NewMainKubelet(kubeCfg, kubeDeps, standaloneMode)
 	if err != nil {
 		return nil, err

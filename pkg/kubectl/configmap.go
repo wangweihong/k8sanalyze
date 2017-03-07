@@ -96,6 +96,7 @@ func (s ConfigMapGeneratorV1) ParamNames() []GeneratorParam {
 }
 
 // StructuredGenerate outputs a configMap object using the configured fields.
+//构建一个configmap对象,从文件中或者字符串序列中
 func (s ConfigMapGeneratorV1) StructuredGenerate() (runtime.Object, error) {
 	if err := s.validate(); err != nil {
 		return nil, err

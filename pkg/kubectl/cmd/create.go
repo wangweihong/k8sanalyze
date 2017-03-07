@@ -57,7 +57,9 @@ func NewCmdCreate(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 		Long:    create_long,
 		Example: create_example,
 		Run: func(cmd *cobra.Command, args []string) {
+			//这里根据yaml文件创建资源的地方?
 			if cmdutil.IsFilenameEmpty(options.Filenames) {
+				//参数中文件名为空,则打印帮助提示
 				defaultRunFunc := cmdutil.DefaultSubCommandRun(errOut)
 				defaultRunFunc(cmd, args)
 				return
@@ -100,10 +102,12 @@ func ValidateArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+//解析Yaml文件创建资源?
 func RunCreate(f cmdutil.Factory, cmd *cobra.Command, out, errOut io.Writer, options *resource.FilenameOptions) error {
 	if cmdutil.GetFlagBool(cmd, "edit") {
 		return RunEditOnCreate(f, out, errOut, cmd, options)
 	}
+	//获取检查资源的模式,这个schema中的ValidateBytes方法就负责对资源的描述的合法性进行检测.
 	schema, err := f.Validator(cmdutil.GetFlagBool(cmd, "validate"), cmdutil.GetFlagString(cmd, "schema-cache-dir"))
 	if err != nil {
 		return err

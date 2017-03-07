@@ -40,10 +40,11 @@ const (
 
 // KubeletServer encapsulates all of the parameters necessary for starting up
 // a kubelet. These can either be set via command line or directly.
+//kubelet参数合集
 type KubeletServer struct {
 	componentconfig.KubeletConfiguration
 
-	KubeConfig          flag.StringFlag
+	KubeConfig          flag.StringFlag //?
 	BootstrapKubeconfig string
 
 	// If true, an invalid KubeConfig will result in the Kubelet exiting with an error.

@@ -42,11 +42,11 @@ const defaultHttpGetAttempts int = 3
 // from the command line and converting them to a list of resources to iterate
 // over using the Visitor interface.
 type Builder struct {
-	mapper *Mapper
+	mapper *Mapper //??
 
 	errs []error
 
-	paths  []Visitor
+	paths  []Visitor //???通过这个接口把参数转换成资源?
 	stream bool
 	dir    bool
 
@@ -56,7 +56,7 @@ type Builder struct {
 	resources []string
 
 	namespace    string
-	allNamespace bool
+	allNamespace bool //??
 	names        []string
 
 	resourceTuples []resourceTuple
@@ -96,9 +96,10 @@ func IsUsageError(err error) bool {
 
 type FilenameOptions struct {
 	Filenames []string
-	Recursive bool
+	Recursive bool //指定资源目录?
 }
 
+//资源元组
 type resourceTuple struct {
 	Resource string
 	Name     string
@@ -190,6 +191,7 @@ func (b *Builder) Stream(r io.Reader, name string) *Builder {
 // ignored (but logged at V(2)).
 func (b *Builder) Path(recursive bool, paths ...string) *Builder {
 	for _, p := range paths {
+		//检测文件是否存在
 		_, err := os.Stat(p)
 		if os.IsNotExist(err) {
 			b.errs = append(b.errs, fmt.Errorf("the path %q does not exist", p))

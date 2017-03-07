@@ -19,6 +19,9 @@ package qos
 // QOSClass defines the supported qos classes of Pods/Containers.
 type QOSClass string
 
+//所有的pod属于这三个级别中的一种.BestEffort是最低优先级,一旦系统OOM时,BestEffort的Pod将会被杀死以获取内存
+//Burstable第二, 一旦OOM,BestEffort被杀完了,Burstable会被杀死
+//参考https://github.com/kubernetes/community/blob/master/contributors/design-proposals/resource-qos.md
 const (
 	// Guaranteed is the Guaranteed qos class.
 	Guaranteed QOSClass = "Guaranteed"

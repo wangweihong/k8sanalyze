@@ -78,6 +78,7 @@ type CachedNodeInfo struct {
 
 // GetNodeInfo returns cached data for the node 'id'.
 func (c *CachedNodeInfo) GetNodeInfo(id string) (*v1.Node, error) {
+	//通过kube client获取节点的数据
 	node, exists, err := c.Get(&v1.Node{ObjectMeta: v1.ObjectMeta{Name: id}})
 
 	if err != nil {

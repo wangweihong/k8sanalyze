@@ -39,6 +39,7 @@ import (
 // status of the mirror pod always reflects the actual status of the static
 // pod. When a static pod gets deleted, the associated orphaned mirror pod
 // will also be removed.
+//不是由api创建的pod成为static pod, kubelet会在api server中创建一个与之映射的Mirror pod来维护该static pod的状态.
 type Manager interface {
 	// GetPods returns the regular pods bound to the kubelet and their spec.
 	GetPods() []*v1.Pod
@@ -101,19 +102,19 @@ type basicManager struct {
 	lock sync.RWMutex
 
 	// Regular pods indexed by UID.
-	podByUID map[types.UID]*v1.Pod
+	podByUID map[types.UID]*v1.Pod //不同的pod
 	// Mirror pods indexed by UID.
-	mirrorPodByUID map[types.UID]*v1.Pod
+	mirrorPodByUID map[types.UID]*v1.Pod //镜像Pod
 
 	// Pods indexed by full name for easy access.
-	podByFullName       map[string]*v1.Pod
+	podByFullName       map[string]*v1.Pod // key = podName+"_" + namespace
 	mirrorPodByFullName map[string]*v1.Pod
 
 	// Mirror pod UID to pod UID map.
 	translationByUID map[types.UID]types.UID
 
 	// A mirror pod client to create/delete mirror pods.
-	MirrorClient
+	MirrorClient //用于访问apiserver创建镜像pod
 }
 
 // NewBasicPodManager returns a functional Manager.
@@ -151,9 +152,10 @@ func (pm *basicManager) UpdatePod(pod *v1.Pod) {
 // updatePodsInternal replaces the given pods in the current state of the
 // manager, updating the various indices.  The caller is assumed to hold the
 // lock.
+// 将Pods信息记录到basicManager
 func (pm *basicManager) updatePodsInternal(pods ...*v1.Pod) {
 	for _, pod := range pods {
-		podFullName := kubecontainer.GetPodFullName(pod)
+		podFullName := kubecontainer.GetPodFullName(pod) //获取pod+"_"+namespace名
 		if IsMirrorPod(pod) {
 			pm.mirrorPodByUID[pod.UID] = pod
 			pm.mirrorPodByFullName[podFullName] = pod

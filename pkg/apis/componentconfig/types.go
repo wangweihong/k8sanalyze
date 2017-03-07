@@ -144,6 +144,7 @@ type KubeletConfiguration struct {
 	// for all interfaces)
 	Address string
 	// port is the port for the Kubelet to serve on.
+	//默认是10250?
 	Port int32
 	// readOnlyPort is the read-only port for the Kubelet to serve on with
 	// no authentication/authorization (set to 0 to disable)
@@ -316,7 +317,7 @@ type KubeletConfiguration struct {
 	// remoteRuntimeEndpoint is the endpoint of remote runtime service
 	RemoteRuntimeEndpoint string
 	// remoteImageEndpoint is the endpoint of remote image service
-	RemoteImageEndpoint string
+	RemoteImageEndpoint string //镜像参数?
 	// runtimeRequestTimeout is the timeout for all runtime requests except long running
 	// requests - pull, logs, exec and attach.
 	// +optional

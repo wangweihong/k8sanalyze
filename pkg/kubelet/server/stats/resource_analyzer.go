@@ -26,7 +26,7 @@ import (
 type ResourceAnalyzer interface {
 	Start()
 
-	fsResourceAnalyzerInterface
+	fsResourceAnalyzerInterface //文件系统资源分析器接口
 	SummaryProvider
 }
 

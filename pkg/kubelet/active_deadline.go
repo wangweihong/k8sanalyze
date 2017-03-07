@@ -37,7 +37,7 @@ type activeDeadlineHandler struct {
 	// the clock to use for deadline enforcement
 	clock clock.Clock
 	// the provider of pod status
-	podStatusProvider status.PodStatusProvider
+	podStatusProvider status.PodStatusProvider //获取Pod额状态
 	// the recorder to dispatch events when we identify a pod has exceeded active deadline
 	recorder record.EventRecorder
 }

@@ -61,6 +61,7 @@ type runtimeCache struct {
 func (r *runtimeCache) GetPods() ([]*Pod, error) {
 	r.Lock()
 	defer r.Unlock()
+	//如果当前时间到runtimeCache的流逝时间已经超过了默认的缓存时间,则更新runtimeCache中的时间和Pod
 	if time.Since(r.cacheTime) > defaultCachePeriod {
 		if err := r.updateCache(); err != nil {
 			return nil, err
@@ -69,6 +70,7 @@ func (r *runtimeCache) GetPods() ([]*Pod, error) {
 	return r.pods, nil
 }
 
+//如果runttimeCache的时间早于指定的时间,则更新runtimeCache的时间和其中的pod
 func (r *runtimeCache) ForceUpdateIfOlder(minExpectedCacheTime time.Time) error {
 	r.Lock()
 	defer r.Unlock()
@@ -78,6 +80,7 @@ func (r *runtimeCache) ForceUpdateIfOlder(minExpectedCacheTime time.Time) error 
 	return nil
 }
 
+//更新runtimeCache的时间和其中的pod
 func (r *runtimeCache) updateCache() error {
 	pods, timestamp, err := r.getPodsWithTimestamp()
 	if err != nil {
@@ -88,6 +91,7 @@ func (r *runtimeCache) updateCache() error {
 }
 
 // getPodsWithTimestamp records a timestamp and retrieves pods from the getter.
+//获取当前时间,并从getter中获取pod
 func (r *runtimeCache) getPodsWithTimestamp() ([]*Pod, time.Time, error) {
 	// Always record the timestamp before getting the pods to avoid stale pods.
 	timestamp := time.Now()

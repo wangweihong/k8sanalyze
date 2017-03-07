@@ -40,15 +40,15 @@ type diskSpaceManager interface {
 
 type DiskSpacePolicy struct {
 	// free disk space threshold for filesystem holding docker images.
-	DockerFreeDiskMB int
+	DockerFreeDiskMB int //存储镜像的文件系统的剩余空间阈值
 	// free disk space threshold for root filesystem. Host volumes are created on root fs.
-	RootFreeDiskMB int
+	RootFreeDiskMB int //根文件系统的剩余空间阈值
 }
 
 type fsInfo struct {
 	Usage     int64
-	Capacity  int64
-	Available int64
+	Capacity  int64 //容量
+	Available int64 //可用容量
 	Timestamp time.Time
 }
 

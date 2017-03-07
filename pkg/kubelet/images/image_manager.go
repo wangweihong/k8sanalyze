@@ -30,16 +30,18 @@ import (
 )
 
 // imageManager provides the functionalities for image pulling.
+//提供镜像拉取功能
 type imageManager struct {
 	recorder     record.EventRecorder
 	imageService kubecontainer.ImageService
 	backOff      *flowcontrol.Backoff
 	// It will check the presence of the image, and report the 'image pulling', image pulled' events correspondingly.
-	puller imagePuller
+	puller imagePuller //镜像拉取器,有两种:并行拉取和串行拉取
 }
 
 var _ ImageManager = &imageManager{}
 
+//镜像拉取的实际动作由传递的参数imageService进行的.
 func NewImageManager(recorder record.EventRecorder, imageService kubecontainer.ImageService, imageBackOff *flowcontrol.Backoff, serialized bool, qps float32, burst int) ImageManager {
 	imageService = throttleImagePulling(imageService, qps, burst)
 
@@ -59,6 +61,7 @@ func NewImageManager(recorder record.EventRecorder, imageService kubecontainer.I
 
 // shouldPullImage returns whether we should pull an image according to
 // the presence and pull policy of the image.
+//根据镜像拉取策略,决定是否应该拉取镜像
 func shouldPullImage(container *v1.Container, imagePresent bool) bool {
 	if container.ImagePullPolicy == v1.PullNever {
 		return false
@@ -83,7 +86,9 @@ func (m *imageManager) logIt(ref *v1.ObjectReference, eventtype, event, prefix, 
 
 // EnsureImageExists pulls the image for the specified pod and container, and returns
 // (imageRef, error message, error).
+//根据Pod的镜像拉取策略,决定是否拉取镜像,secret中包含私有镜像仓库的认证
 func (m *imageManager) EnsureImageExists(pod *v1.Pod, container *v1.Container, pullSecrets []v1.Secret) (string, string, error) {
+	//Pod名/容器名?
 	logPrefix := fmt.Sprintf("%s/%s", pod.Name, container.Image)
 	ref, err := kubecontainer.GenerateContainerRef(pod, container)
 	if err != nil {
@@ -91,14 +96,15 @@ func (m *imageManager) EnsureImageExists(pod *v1.Pod, container *v1.Container, p
 	}
 
 	// If the image contains no tag or digest, a default tag should be applied.
+	//是否使用默认的tag
 	image, err := applyDefaultImageTag(container.Image)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to apply default image tag %q: %v", container.Image, err)
 		m.logIt(ref, v1.EventTypeWarning, events.FailedToInspectImage, logPrefix, msg, glog.Warning)
 		return "", msg, ErrInvalidImageName
 	}
-
 	spec := kubecontainer.ImageSpec{Image: image}
+	//获取镜像在本地的引用,如果imageRef为"",说明镜像在本地不存在
 	imageRef, err := m.imageService.GetImageRef(spec)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to inspect image %q: %v", container.Image, err)
@@ -107,6 +113,7 @@ func (m *imageManager) EnsureImageExists(pod *v1.Pod, container *v1.Container, p
 	}
 
 	present := imageRef != ""
+	//决定是否应该拉取镜像1)如果镜像策略为Never,当前有镜像返回,没镜像报错.
 	if !shouldPullImage(container, present) {
 		if present {
 			msg := fmt.Sprintf("Container image %q already present on machine", container.Image)
@@ -127,7 +134,7 @@ func (m *imageManager) EnsureImageExists(pod *v1.Pod, container *v1.Container, p
 	}
 	m.logIt(ref, v1.EventTypeNormal, events.PullingImage, logPrefix, fmt.Sprintf("pulling image %q", container.Image), glog.Info)
 	pullChan := make(chan pullResult)
-	m.puller.pullImage(spec, pullSecrets, pullChan)
+	m.puller.pullImage(spec, pullSecrets, pullChan) //镜像管理器拉取镜像,Secret是拉取镜像所需要的授权信息
 	imagePullResult := <-pullChan
 	if imagePullResult.err != nil {
 		m.logIt(ref, v1.EventTypeWarning, events.FailedToPullImage, logPrefix, fmt.Sprintf("Failed to pull image %q: %v", container.Image, imagePullResult.err), glog.Warning)
@@ -146,6 +153,7 @@ func (m *imageManager) EnsureImageExists(pod *v1.Pod, container *v1.Container, p
 
 // applyDefaultImageTag parses a docker image string, if it doesn't contain any tag or digest,
 // a default tag will be applied.
+//解析镜像名,确定镜像是否包含tag或者digest,没有则采用默认的镜像tag.
 func applyDefaultImageTag(image string) (string, error) {
 	named, err := dockerref.ParseNamed(image)
 	if err != nil {

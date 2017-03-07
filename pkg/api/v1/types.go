@@ -3112,7 +3112,7 @@ const (
 )
 
 // ResourceList is a set of (resource name, quantity) pairs.
-type ResourceList map[ResourceName]resource.Quantity
+type ResourceList map[ResourceName]resource.Quantity //记录资源的数量
 
 // +genclient=true
 // +nonNamespaced=true

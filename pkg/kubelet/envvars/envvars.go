@@ -29,20 +29,26 @@ import (
 // provided as an argument.
 func FromServices(services []*v1.Service) []v1.EnvVar {
 	var result []v1.EnvVar
+	//遍历所有的服务
 	for i := range services {
 		service := services[i]
 
 		// ignore services where ClusterIP is "None" or empty
 		// the services passed to this method should be pre-filtered
 		// only services that have the cluster IP set should be included here
+
+		//如果service没有设置ClusterIP或者ClusterIP为"none"
 		if !v1.IsServiceIPSet(service) {
 			continue
 		}
 
 		// Host
+		//将服务名中的"-"转换成"_"后再转换成大写
+		// <转换后的服务名>_SERVICE_HOST = Cluster IP
 		name := makeEnvVariableName(service.Name) + "_SERVICE_HOST"
 		result = append(result, v1.EnvVar{Name: name, Value: service.Spec.ClusterIP})
 		// First port - give it the backwards-compatible name
+		// <转换后的服务名>_SERVICE_PORT = 第一个Port的值
 		name = makeEnvVariableName(service.Name) + "_SERVICE_PORT"
 		result = append(result, v1.EnvVar{Name: name, Value: strconv.Itoa(int(service.Spec.Ports[0].Port))})
 		// All named ports (only the first may be unnamed, checked in validation)
@@ -59,6 +65,7 @@ func FromServices(services []*v1.Service) []v1.EnvVar {
 	return result
 }
 
+//将字符串中的-转换成_,然后再转换成大写
 func makeEnvVariableName(str string) string {
 	// TODO: If we simplify to "all names are DNS1123Subdomains" this
 	// will need two tweaks:
@@ -68,15 +75,20 @@ func makeEnvVariableName(str string) string {
 }
 
 func makeLinkVariables(service *v1.Service) []v1.EnvVar {
+	//服务名中的-转换成_后,再转换成大写
 	prefix := makeEnvVariableName(service.Name)
 	all := []v1.EnvVar{}
+	//遍历服务的所有端口
 	for i := range service.Spec.Ports {
 		sp := &service.Spec.Ports[i]
 
+		//如果port没有指定协议,默认TCP协议
 		protocol := string(v1.ProtocolTCP)
 		if sp.Protocol != "" {
 			protocol = string(sp.Protocol)
 		}
+
+		//如果是第一个端口
 		if i == 0 {
 			// Docker special-cases the first port.
 			all = append(all, v1.EnvVar{
@@ -84,6 +96,7 @@ func makeLinkVariables(service *v1.Service) []v1.EnvVar {
 				Value: fmt.Sprintf("%s://%s:%d", strings.ToLower(protocol), service.Spec.ClusterIP, sp.Port),
 			})
 		}
+		//其他端口
 		portPrefix := fmt.Sprintf("%s_PORT_%d_%s", prefix, sp.Port, strings.ToUpper(protocol))
 		all = append(all, []v1.EnvVar{
 			{

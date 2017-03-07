@@ -128,6 +128,7 @@ type imageRecord struct {
 	size int64
 }
 
+//镜像回收管理器, 如果需要定制我们的镜像回收策略,只需要更改这块的内容
 func NewImageGCManager(runtime container.Runtime, cadvisorInterface cadvisor.Interface, recorder record.EventRecorder, nodeRef *v1.ObjectReference, policy ImageGCPolicy) (ImageGCManager, error) {
 	// Validate policy.
 	if policy.HighThresholdPercent < 0 || policy.HighThresholdPercent > 100 {
@@ -292,6 +293,7 @@ func (im *realImageGCManager) DeleteUnusedImages() (int64, error) {
 // bytes freed is always returned.
 // Note that error may be nil and the number of bytes free may be less
 // than bytesToFree.
+//回收镜像的真正动作
 func (im *realImageGCManager) freeSpace(bytesToFree int64, freeTime time.Time) (int64, error) {
 	err := im.detectImages(freeTime)
 	if err != nil {

@@ -67,6 +67,7 @@ type podGetter interface {
 	GetPodByUID(kubetypes.UID) (*v1.Pod, bool)
 }
 
+//k8s运行管理器?
 type kubeGenericRuntimeManager struct {
 	runtimeName         string
 	recorder            record.EventRecorder
@@ -179,7 +180,7 @@ func NewKubeGenericRuntimeManager(
 
 	kubeRuntimeManager.imagePuller = images.NewImageManager(
 		kubecontainer.FilterEventRecorder(recorder),
-		kubeRuntimeManager,
+		kubeRuntimeManager, //真正拉取镜像的执行者
 		imageBackOff,
 		serializeImagePulls,
 		imagePullQPS,

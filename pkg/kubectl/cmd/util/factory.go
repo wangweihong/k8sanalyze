@@ -497,6 +497,7 @@ func downloadSchemaAndStore(c schemaClient, cacheDir, fullDir, cacheFile, prefix
 }
 
 func (c *clientSwaggerSchema) ValidateBytes(data []byte) error {
+	//利用json解析data,通过apiversion和kind,确认schema.GroupVersionKind
 	gvk, err := json.DefaultMetaFactory.Interpret(data)
 	if err != nil {
 		return err

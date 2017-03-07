@@ -166,6 +166,7 @@ type Option func(*Kubelet)
 
 // bootstrapping interface for kubelet, targets the initialization protocol
 //kubelet如何进行自举?这个接口负责的是启动kubelet?
+//这是kubelet对象实现的接口
 type KubeletBootstrap interface {
 	GetConfiguration() componentconfig.KubeletConfiguration
 	BirthCry()
@@ -173,16 +174,17 @@ type KubeletBootstrap interface {
 	ListenAndServe(address net.IP, port uint, tlsOptions *server.TLSOptions, auth server.AuthInterface, enableDebuggingHandlers bool)
 	ListenAndServeReadOnly(address net.IP, port uint)
 	Run(<-chan kubetypes.PodUpdate)
-	RunOnce(<-chan kubetypes.PodUpdate) ([]RunPodResult, error)
+	RunOnce(<-chan kubetypes.PodUpdate) ([]RunPodResult, error) ///??kublet在哪里实现了这个方法?在当前包的runonce.go中实现了.
 }
 
 // create and initialize a Kubelet instance
-//返回一个Interface??
+//返回一个Interface??这个函数是构建了kubelet对象,kubelet对象实现了这个接口
 type KubeletBuilder func(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *KubeletDeps, standaloneMode bool) (KubeletBootstrap, error)
 
 // KubeletDeps is a bin for things we might consider "injected注入的 dependencies" -- objects constructed
 // at runtime that are necessary for running the Kubelet. This is a temporary solution for grouping
 // these objects while we figure out a more comprehensive dependency injection story for the Kubelet.
+//kubelet依赖的其他组件?这个是什么情况下如何使用? kubelet二进制程序默认该项为nil.但后面检测到为nil时,通过cmd/kubelet/app/server.go中额UnsecuredKubeletDeps创建了新的kubedeps对象
 type KubeletDeps struct {
 	// TODO(mtaufen): KubeletBuilder:
 	//                Mesos currently uses this as a hook to let them make their own call to
@@ -191,7 +193,7 @@ type KubeletDeps struct {
 	//                a nice home for it would be. There seems to be a trend, between this and
 	//                the Options fields below, of providing hooks where you can add extra functionality
 	//                to the Kubelet for your solution. Maybe we should centralize these sorts of things?
-	Builder KubeletBuilder
+	Builder KubeletBuilder //描述如何创建Kubelet对象,如果没有指定,则会使用CreateAndInitKubelet来构建Kubelet对象
 
 	// TODO(mtaufen): ContainerRuntimeOptions and Options:
 	//                Arrays of functions that can do arbitrary things to the Kubelet and the Runtime
@@ -213,20 +215,22 @@ type KubeletDeps struct {
 	ContainerManager  cm.ContainerManager
 	DockerClient      dockertools.DockerInterface
 	EventClient       *clientset.Clientset
-	KubeClient        *clientset.Clientset
-	Mounter           mount.Interface
-	NetworkPlugins    []network.NetworkPlugin
-	OOMAdjuster       *oom.OOMAdjuster
-	OSInterface       kubecontainer.OSInterface
-	PodConfig         *config.PodConfig
-	Recorder          record.EventRecorder
-	Writer            kubeio.Writer
-	VolumePlugins     []volume.VolumePlugin
-	TLSOptions        *server.TLSOptions
+	//k8s的客户端
+	KubeClient     *clientset.Clientset
+	Mounter        mount.Interface
+	NetworkPlugins []network.NetworkPlugin
+	OOMAdjuster    *oom.OOMAdjuster
+	OSInterface    kubecontainer.OSInterface
+	PodConfig      *config.PodConfig
+	Recorder       record.EventRecorder
+	Writer         kubeio.Writer
+	VolumePlugins  []volume.VolumePlugin
+	TLSOptions     *server.TLSOptions
 }
 
 // makePodSourceConfig creates a config.PodConfig from the given
 // KubeletConfiguration or returns an error.
+//这个Pod配置做什么用的?
 func makePodSourceConfig(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *KubeletDeps, nodeName types.NodeName) (*config.PodConfig, error) {
 	manifestURLHeader := make(http.Header)
 	if kubeCfg.ManifestURLHeader != "" {
@@ -259,6 +263,7 @@ func makePodSourceConfig(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps
 }
 
 func getRuntimeAndImageServices(config *componentconfig.KubeletConfiguration) (internalapi.RuntimeService, internalapi.ImageManagerService, error) {
+	//远程镜像服务?
 	rs, err := remote.NewRemoteRuntimeService(config.RemoteRuntimeEndpoint, config.RuntimeRequestTimeout.Duration)
 	if err != nil {
 		return nil, nil, err
@@ -292,9 +297,11 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		}
 	}
 
+	//通过uname -n来获取主机名
 	hostname := nodeutil.GetHostname(kubeCfg.HostnameOverride)
 	// Query the cloud provider for our node name, default to hostname
 	nodeName := types.NodeName(hostname)
+	//这个云实例有什么作用?
 	if kubeDeps.Cloud != nil {
 		var err error
 		instances, ok := kubeDeps.Cloud.Instances()
@@ -313,12 +320,14 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	// TODO: KubeletDeps.KubeClient should be a client interface, but client interface misses certain methods
 	// used by kubelet. Since NewMainKubelet expects a client interface, we need to make sure we are not passing
 	// a nil pointer to it when what we really want is a nil interface.
+	//这个kubeClient用于和k8s server进行通信
 	var kubeClient clientset.Interface
 	if kubeDeps.KubeClient != nil {
 		kubeClient = kubeDeps.KubeClient
 		// TODO: remove this when we've refactored kubelet to only use clientset.
 	}
 
+	//??这个PodConfig有什么作用?
 	if kubeDeps.PodConfig == nil {
 		var err error
 		kubeDeps.PodConfig, err = makePodSourceConfig(kubeCfg, kubeDeps, nodeName)
@@ -327,27 +336,32 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		}
 	}
 
+	//用于管理容器如何进行回收
 	containerGCPolicy := kubecontainer.ContainerGCPolicy{
 		MinAge:             kubeCfg.MinimumGCAge.Duration,
 		MaxPerPodContainer: int(kubeCfg.MaxPerPodContainerCount),
 		MaxContainers:      int(kubeCfg.MaxContainerCount),
 	}
 
+	//kubelet的服务端口?
 	daemonEndpoints := &v1.NodeDaemonEndpoints{
 		KubeletEndpoint: v1.DaemonEndpoint{Port: kubeCfg.Port},
 	}
 
+	//容器镜像回收策略
 	imageGCPolicy := images.ImageGCPolicy{
 		MinAge:               kubeCfg.ImageMinimumGCAge.Duration,
 		HighThresholdPercent: int(kubeCfg.ImageGCHighThresholdPercent),
 		LowThresholdPercent:  int(kubeCfg.ImageGCLowThresholdPercent),
 	}
 
+	//指定硬盘空间策略
 	diskSpacePolicy := DiskSpacePolicy{
 		DockerFreeDiskMB: int(kubeCfg.LowDiskSpaceThresholdMB),
 		RootFreeDiskMB:   int(kubeCfg.LowDiskSpaceThresholdMB),
 	}
 
+	//驱逐什么?驱逐Pod?
 	thresholds, err := eviction.ParseThresholdConfig(kubeCfg.EvictionHard, kubeCfg.EvictionSoft, kubeCfg.EvictionSoftGracePeriod, kubeCfg.EvictionMinimumReclaim)
 	if err != nil {
 		return nil, err
@@ -359,11 +373,13 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		KernelMemcgNotification:  kubeCfg.ExperimentalKernelMemcgNotification,
 	}
 
+	//用于记录kubelet和非kubelet组件保留的资源数量,达到了资源上限,将会做什么样的处理?
 	reservation, err := ParseReservation(kubeCfg.KubeReserved, kubeCfg.SystemReserved)
 	if err != nil {
 		return nil, err
 	}
 
+	//指定容器处理时的控制器,CROI/docker/rkt,所作的处理都不一样
 	var dockerExecHandler dockertools.ExecHandler
 	switch kubeCfg.DockerExecHandlerName {
 	case "native":
@@ -375,13 +391,18 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		dockerExecHandler = &dockertools.NativeExecHandler{}
 	}
 
+	//??服务存储?访问apiserverz中的services资源
+	//如果kubeClient为空?那么是那么是如何获取service资源的?
+	//如果没有配置apiserver参数(standalone模式?),或者创建k8sclient失败时,才会导致kubeClient为nil
 	serviceStore := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	if kubeClient != nil {
 		serviceLW := cache.NewListWatchFromClient(kubeClient.Core().RESTClient(), "services", v1.NamespaceAll, fields.Everything())
+		//创建一个反射器,一但监控的资源改变,立即更改当前的数据
 		cache.NewReflector(serviceLW, &v1.Service{}, serviceStore, 0).Run()
 	}
 	serviceLister := &cache.StoreToServiceLister{Indexer: serviceStore}
 
+	//获取当前节点在apiserver中节点信息
 	nodeStore := cache.NewStore(cache.MetaNamespaceKeyFunc)
 	if kubeClient != nil {
 		fieldSelector := fields.Set{api.ObjectNameField: string(nodeName)}.AsSelector()
@@ -394,6 +415,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	// TODO: get the real node object of ourself,
 	// and use the real node name and UID.
 	// TODO: what is namespace for node?
+	//??这里的作用?节点有命名空间?
 	nodeRef := &v1.ObjectReference{
 		Kind:      "Node",
 		Name:      string(nodeName),
@@ -401,28 +423,32 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		Namespace: "",
 	}
 
+	//用于管理硬盘空间,
 	diskSpaceManager, err := newDiskSpaceManager(kubeDeps.CAdvisorInterface, diskSpacePolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize disk manager: %v", err)
 	}
+	//管理容器的引用计数,这个引用计数有什么作用?会对Pod造成什么样的影响
 	containerRefManager := kubecontainer.NewRefManager()
 
+	//监控什么的OOM
 	oomWatcher := NewOOMWatcher(kubeDeps.CAdvisorInterface, kubeDeps.Recorder)
 
 	klet := &Kubelet{
-		hostname:                       hostname,
-		nodeName:                       nodeName,
-		dockerClient:                   kubeDeps.DockerClient,
-		kubeClient:                     kubeClient,
-		rootDirectory:                  kubeCfg.RootDirectory,
-		resyncInterval:                 kubeCfg.SyncFrequency.Duration,
-		containerRefManager:            containerRefManager,
-		httpClient:                     &http.Client{},
-		sourcesReady:                   config.NewSourcesReady(kubeDeps.PodConfig.SeenAllSources),
-		registerNode:                   kubeCfg.RegisterNode,
-		registerSchedulable:            kubeCfg.RegisterSchedulable,
-		standaloneMode:                 standaloneMode,
-		clusterDomain:                  kubeCfg.ClusterDomain,
+		hostname:            hostname,
+		nodeName:            nodeName,
+		dockerClient:        kubeDeps.DockerClient,
+		kubeClient:          kubeClient,
+		rootDirectory:       kubeCfg.RootDirectory,
+		resyncInterval:      kubeCfg.SyncFrequency.Duration,
+		containerRefManager: containerRefManager,
+		httpClient:          &http.Client{},
+		sourcesReady:        config.NewSourcesReady(kubeDeps.PodConfig.SeenAllSources),
+		registerNode:        kubeCfg.RegisterNode,
+		registerSchedulable: kubeCfg.RegisterSchedulable,
+		standaloneMode:      standaloneMode,
+		clusterDomain:       kubeCfg.ClusterDomain,
+		//这个DNS?
 		clusterDNS:                     net.ParseIP(kubeCfg.ClusterDNS),
 		serviceLister:                  serviceLister,
 		nodeLister:                     nodeLister,
@@ -434,7 +460,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		diskSpaceManager:               diskSpaceManager,
 		cloud:                          kubeDeps.Cloud,
 		autoDetectCloudProvider:   (componentconfigv1alpha1.AutoDetectCloudProvider == kubeCfg.CloudProvider),
-		nodeRef:                   nodeRef,
+		nodeRef:                   nodeRef, //当前节点在apiserver数据?
 		nodeLabels:                kubeCfg.NodeLabels,
 		nodeStatusUpdateFrequency: kubeCfg.NodeStatusUpdateFrequency.Duration,
 		os:                kubeDeps.OSInterface,
@@ -479,23 +505,30 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	}
 	glog.Infof("Hairpin mode set to %q", klet.hairpinMode)
 
+	//初始化网络插件
 	if plug, err := network.InitNetworkPlugin(kubeDeps.NetworkPlugins, kubeCfg.NetworkPluginName, &criNetworkHost{&networkHost{klet}}, klet.hairpinMode, klet.nonMasqueradeCIDR, int(kubeCfg.NetworkPluginMTU)); err != nil {
 		return nil, err
 	} else {
 		klet.networkPlugin = plug
 	}
 
+	//通过cadvisor获取当前的机器信息
 	machineInfo, err := klet.GetCachedMachineInfo()
 	if err != nil {
 		return nil, err
 	}
 
+	//提供通过/proc中cgroup获取容器名的功能
 	procFs := procfs.NewProcFS()
+	//这是一组包含多个时间段的对象
 	imageBackOff := flowcontrol.NewBackOff(backOffPeriod, MaxContainerBackOff)
 
+	//Pod的liveness管理器
 	klet.livenessManager = proberesults.NewManager()
 
+	//这里保存这Pod相关的状态信息
 	klet.podCache = kubecontainer.NewCache()
+	//管理Pod ,提供一个Kube client用于管理mirror pod
 	klet.podManager = kubepod.NewBasicPodManager(kubepod.NewBasicMirrorClient(klet.kubeClient))
 
 	if kubeCfg.RemoteRuntimeEndpoint != "" {
@@ -510,6 +543,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	if binDir == "" {
 		binDir = kubeCfg.NetworkPluginDir
 	}
+	//和Cni插件有关
 	pluginSettings := dockershim.NetworkPluginSettings{
 		HairpinMode:       klet.hairpinMode,
 		NonMasqueradeCIDR: klet.nonMasqueradeCIDR,
@@ -525,6 +559,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	var nl *noOpLegacyHost
 	pluginSettings.LegacyRuntimeHost = nl
 
+	//??容器运行时接口,这个CRI怎么配置?k8s还没有默认使用CRI
 	if kubeCfg.EnableCRI {
 		// kubelet defers to the runtime shim to setup networking. Setting
 		// this to nil will prevent it from trying to invoke the plugin.
@@ -532,7 +567,9 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		// becomes the default.
 		klet.networkPlugin = nil
 
+		//运行时容器,沙盒管理器
 		var runtimeService internalapi.RuntimeService
+		//运行时镜像管理器,kubelet的镜像下载通过该接口来实现
 		var imageService internalapi.ImageManagerService
 		var err error
 
@@ -685,6 +722,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	}
 
 	// TODO: Factor out "StatsProvider" from Kubelet so we don't have a cyclic dependency
+	//资源分析器?这个分析器的作用?
 	klet.resourceAnalyzer = stats.NewResourceAnalyzer(klet, kubeCfg.VolumeStatsAggPeriod.Duration, klet.containerRuntime)
 
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
@@ -696,18 +734,22 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	if err != nil {
 		return nil, err
 	}
+	//设置容器的回收
 	klet.containerGC = containerGC
 	klet.containerDeletor = newPodContainerDeletor(klet.containerRuntime, integer.IntMax(containerGCPolicy.MaxPerPodContainer, minDeadContainerInPod))
 
 	// setup imageManager
+	//用于回收镜像的管理器
 	imageManager, err := images.NewImageGCManager(klet.containerRuntime, kubeDeps.CAdvisorInterface, kubeDeps.Recorder, nodeRef, imageGCPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize image manager: %v", err)
 	}
 	klet.imageManager = imageManager
 
+	//用于管理Pod的状态?
 	klet.statusManager = status.NewManager(kubeClient, klet.podManager)
 
+	//liveness, readiess
 	klet.probeManager = prober.NewManager(
 		klet.statusManager,
 		klet.livenessManager,
@@ -739,6 +781,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		kubeDeps.Recorder,
 		kubeCfg.ExperimentalCheckNodeCapabilitiesBeforeMount)
 
+	//设置运行时容器的缓存
 	runtimeCache, err := kubecontainer.NewRuntimeCache(klet.containerRuntime)
 	if err != nil {
 		return nil, err
@@ -822,7 +865,7 @@ type Kubelet struct {
 	runtimeCache  kubecontainer.RuntimeCache
 	kubeClient    clientset.Interface
 	iptClient     utilipt.Interface
-	rootDirectory string
+	rootDirectory string //这个根目录默认路径是什么?/var/lib/kubelet?
 
 	// podWorkers handle syncing Pods in response to events.
 	podWorkers PodWorkers
@@ -874,10 +917,13 @@ type Kubelet struct {
 	// masterServiceNamespace is the namespace that the master service is exposed in.
 	masterServiceNamespace string
 	// serviceLister knows how to list services
+	//提供了一个利用k8s client访问api server中的service资源
 	serviceLister serviceLister
 	// nodeLister knows how to list nodes
+	//提供了一个利用k8s client访问api server中的node资源
 	nodeLister nodeLister
 	// nodeInfo knows how to get information about the node for this kubelet.
+	//保存的是api.Node的信息
 	nodeInfo predicates.NodeInfo
 
 	// a list of node labels to register
@@ -918,6 +964,7 @@ type Kubelet struct {
 	machineInfo *cadvisorapi.MachineInfo
 
 	// Syncs pods statuses with apiserver; also used as a cache of statuses.
+	// 同步Pod的状态
 	statusManager status.Manager
 
 	// VolumeManager runs a set of asynchronous loops that figure out which
@@ -1122,8 +1169,10 @@ func (kl *Kubelet) setupDataDirs() error {
 }
 
 // Starts garbage collection threads.
+//容器垃圾回收和镜像垃圾回收
 func (kl *Kubelet) StartGarbageCollection() {
 	loggedContainerGCFailure := false
+	//周期性执行垃圾回收,直到接收到wait.NeverStop信号, 什么情况下会接收到这个信号
 	go wait.Until(func() {
 		if err := kl.containerGC.GarbageCollect(kl.sourcesReady.AllReady()); err != nil {
 			glog.Errorf("Container garbage collection failed: %v", err)
@@ -1141,6 +1190,7 @@ func (kl *Kubelet) StartGarbageCollection() {
 	}, ContainerGCPeriod, wait.NeverStop)
 
 	loggedImageGCFailure := false
+	//周期性执行镜像回收策略
 	go wait.Until(func() {
 		if err := kl.imageManager.GarbageCollect(); err != nil {
 			glog.Errorf("Image garbage collection failed: %v", err)
@@ -1160,16 +1210,19 @@ func (kl *Kubelet) StartGarbageCollection() {
 
 // initializeModules will initialize internal modules that do not require the container runtime to be up.
 // Note that the modules here must not depend on modules that are not initialized here.
+//内部模块?
 func (kl *Kubelet) initializeModules() error {
 	// Step 1: Promethues metrics.
-	metrics.Register(kl.runtimeCache)
+	metrics.Register(kl.runtimeCache) //注册相关的指标?
 
 	// Step 2: Setup filesystem directories.
+	//默认的根目录在/var/lib/kubelet?这些目录的作用?
 	if err := kl.setupDataDirs(); err != nil {
 		return err
 	}
 
 	// Step 3: If the container logs directory does not exist, create it.
+	//包含容器的日志
 	if _, err := os.Stat(ContainerLogsDir); err != nil {
 		if err := kl.os.MkdirAll(ContainerLogsDir, 0755); err != nil {
 			glog.Errorf("Failed to create directory %q: %v", ContainerLogsDir, err)
@@ -1177,24 +1230,29 @@ func (kl *Kubelet) initializeModules() error {
 	}
 
 	// Step 4: Start the image manager.
+	//负责回收镜像的镜像管理器
 	kl.imageManager.Start()
 
 	// Step 5: Start container manager.
+	//如果不是单节点模式(没有apiserver),则通过kube client获取节点的信息
 	node, err := kl.getNodeAnyWay()
 	if err != nil {
 		return fmt.Errorf("Kubelet failed to get node info: %v", err)
 	}
 
+	//容器管理器,这和系统有关
 	if err := kl.containerManager.Start(node); err != nil {
 		return fmt.Errorf("Failed to start ContainerManager %v", err)
 	}
 
 	// Step 6: Start out of memory watcher.
+	//oomWatcher监控的是系统中的进程?
 	if err := kl.oomWatcher.Start(kl.nodeRef); err != nil {
 		return fmt.Errorf("Failed to start OOM watcher %v", err)
 	}
 
 	// Step 7: Start resource analyzer
+	//这个资源分析器的作用是什么?
 	kl.resourceAnalyzer.Start()
 
 	return nil
@@ -1213,12 +1271,14 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 
 // Run starts the kubelet reacting to config updates
 func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
+	//将/var/log/下的文件当做文件服务器进行提供? 如何访问这个文件服务器?
 	if kl.logServer == nil {
 		kl.logServer = http.StripPrefix("/logs/", http.FileServer(http.Dir("/var/log/")))
 	}
 	if kl.kubeClient == nil {
 		glog.Warning("No api server defined - no node status update will be sent.")
 	}
+	//启动镜像管理器,容器管理器,节点管理器,资源分析器等模块
 	if err := kl.initializeModules(); err != nil {
 		kl.recorder.Eventf(kl.nodeRef, v1.EventTypeWarning, events.KubeletSetupFailed, err.Error())
 		glog.Error(err)
@@ -1678,6 +1738,7 @@ func (kl *Kubelet) canAdmitPod(pods []*v1.Pod, pod *v1.Pod) (bool, string, strin
 	return true, "", ""
 }
 
+//检测kubelet能够运行指定的Pod?
 func (kl *Kubelet) canRunPod(pod *v1.Pod) lifecycle.PodAdmitResult {
 	attrs := &lifecycle.PodAdmitAttributes{Pod: pod}
 	// Get "OtherPods". Rejected pods are failed, so only include admitted pods that are alive.
@@ -2137,6 +2198,7 @@ func isSyncPodWorthy(event *pleg.PodLifecycleEvent) bool {
 
 // parseResourceList parses the given configuration map into an API
 // ResourceList or returns an error.
+//从配置中解析资源列表, 目前仅支持Memory和Cpu
 func parseResourceList(m utilconfig.ConfigurationMap) (v1.ResourceList, error) {
 	rl := make(v1.ResourceList)
 	for k, v := range m {
@@ -2162,12 +2224,14 @@ func parseResourceList(m utilconfig.ConfigurationMap) (v1.ResourceList, error) {
 // configuration maps into an internal Reservation instance or returns an
 // error.
 func ParseReservation(kubeReserved, systemReserved utilconfig.ConfigurationMap) (*kubetypes.Reservation, error) {
-	reservation := new(kubetypes.Reservation)
+	reservation := new(kubetypes.Reservation) //用于记录k8s组件和非K8s组件的资源的数量
+	//解析配置中需要保留的资源, 目前只支持CPU和Memory,kube 组件保存的资源?是k8s集群的组件(所有组件?),还是包括运行的Pod
 	if rl, err := parseResourceList(kubeReserved); err != nil {
 		return nil, err
 	} else {
 		reservation.Kubernetes = rl
 	}
+	//如果使用的资源达到了上限,将会执行什么样的动作?
 	if rl, err := parseResourceList(systemReserved); err != nil {
 		return nil, err
 	} else {
@@ -2181,7 +2245,7 @@ func getStreamingConfig(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps 
 	config := &streaming.Config{
 		// Use a relative redirect (no scheme or host).
 		BaseURL: &url.URL{
-			Path: "/cri/",
+			Path: "/cri/", //这个url的作用?
 		},
 		StreamIdleTimeout:     kubeCfg.StreamingConnectionIdleTimeout.Duration,
 		StreamCreationTimeout: streaming.DefaultConfig.StreamCreationTimeout,

@@ -43,6 +43,7 @@ const (
 func GetHostname(hostnameOverride string) string {
 	var hostname string = hostnameOverride
 	if hostname == "" {
+		//通过内核获取当前的主机名
 		nodename, err := os.Hostname()
 		if err != nil {
 			glog.Fatalf("Couldn't determine hostname: %v", err)
