@@ -185,6 +185,7 @@ func NewKubeGenericRuntimeManager(
 		serializeImagePulls,
 		imagePullQPS,
 		imagePullBurst)
+	//负责管理容器生命周期?
 	kubeRuntimeManager.runner = lifecycle.NewHandlerRunner(httpClient, kubeRuntimeManager, kubeRuntimeManager)
 	kubeRuntimeManager.containerGC = NewContainerGC(runtimeService, podGetter, kubeRuntimeManager)
 

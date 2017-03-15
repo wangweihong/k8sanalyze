@@ -26,6 +26,7 @@ import (
 )
 
 // Signal defines a signal that can trigger eviction of pods on a node.
+//定义一些信号能够触发节点上pod的回收
 type Signal string
 
 const (
@@ -48,9 +49,9 @@ const (
 	// fsStatsLocalVolumeSource identifies stats for pod local volume sources.
 	fsStatsLocalVolumeSource fsStatsType = "localVolumeSource"
 	// fsStatsLogs identifies stats for pod logs.
-	fsStatsLogs fsStatsType = "logs"
+	fsStatsLogs fsStatsType = "logs" //容器日志所占用的容量
 	// fsStatsRoot identifies stats for pod container writable layers.
-	fsStatsRoot fsStatsType = "root"
+	fsStatsRoot fsStatsType = "root" ///??
 )
 
 // ThresholdOperator is the operator used to express a Threshold.
@@ -62,9 +63,10 @@ const (
 )
 
 // Config holds information about how eviction is configured.
+//EvictManager的配置
 type Config struct {
 	// PressureTransitionPeriod is duration the kubelet has to wait before transititioning out of a pressure condition.
-	PressureTransitionPeriod time.Duration
+	PressureTransitionPeriod time.Duration //
 	// Maximum allowed grace period (in seconds) to use when terminating pods in response to a soft eviction threshold being met.
 	MaxPodGracePeriodSeconds int64
 	// Thresholds define the set of conditions monitored to trigger eviction.
@@ -78,23 +80,26 @@ type ThresholdValue struct {
 	// The following fields are exclusive. Only the topmost non-zero field is used.
 
 	// Quantity is a quantity associated with the signal that is evaluated against the specified operator.
-	Quantity *resource.Quantity
+	Quantity *resource.Quantity //数值
 	// Percentage represents the usage percentage over the total resource that is evaluated against the specified operator.
-	Percentage float32
+	Percentage float32 //阈值是百分比,用来乘与该阈值相关资源的总容量
 }
 
 // Threshold defines a metric for when eviction should occur.
+//驱逐阈值
 type Threshold struct {
 	// Signal defines the entity that was measured.
+	//这个信号的作用? 阈值的触发信号?
+	//驱逐信号.每种信号可以在kubelet启动配置参数设置相应的阈值.通过Oprator来计算该信号的资源是否超过阈值
 	Signal Signal
 	// Operator represents a relationship of a signal to a value.
-	Operator ThresholdOperator
+	Operator ThresholdOperator //用来计算阈值是否到达
 	// Value is the threshold the resource is evaluated against.
-	Value ThresholdValue
+	Value ThresholdValue //阈值的值,可以是具体值,或者是百分比(最终计算阈值时,将会乘以Signal所对应资源的总量)
 	// GracePeriod represents the amount of time that a threshold must be met before eviction is triggered.
-	GracePeriod time.Duration
+	GracePeriod time.Duration //宽限时间
 	// MinReclaim represents the minimum amount of resource to reclaim if the threshold is met.
-	MinReclaim *ThresholdValue
+	MinReclaim *ThresholdValue //到阈值最小回收资源数量
 }
 
 // Manager evaluates when an eviction threshold for node stability has been met on the node.
@@ -137,6 +142,7 @@ type ActivePodsFunc func() []*v1.Pod
 type statsFunc func(pod *v1.Pod) (statsapi.PodStats, bool)
 
 // rankFunc sorts the pods in eviction order
+//通过stat函数获取指定pods的资源统计,并进行排序
 type rankFunc func(pods []*v1.Pod, stats statsFunc)
 
 // signalObservation is the observed resource usage
@@ -150,13 +156,13 @@ type signalObservation struct {
 }
 
 // signalObservations maps a signal to an observed quantity
-type signalObservations map[Signal]signalObservation
+type signalObservations map[Signal]signalObservation //用来记录驱逐信号的对应的资源统计
 
 // thresholdsObservedAt maps a threshold to a time that it was observed
-type thresholdsObservedAt map[Threshold]time.Time
+type thresholdsObservedAt map[Threshold]time.Time //阈值信号的观察的时间
 
 // nodeConditionsObservedAt maps a node condition to a time that it was observed
-type nodeConditionsObservedAt map[v1.NodeConditionType]time.Time
+type nodeConditionsObservedAt map[v1.NodeConditionType]time.Time //节点状况的观察时间
 
 // nodeReclaimFunc is a function that knows how to reclaim a resource from the node without impacting pods.
 type nodeReclaimFunc func() (*resource.Quantity, error)

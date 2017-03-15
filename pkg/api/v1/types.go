@@ -1510,6 +1510,7 @@ type Container struct {
 
 // Handler defines a specific action that should be taken
 // TODO: pass structured data to these actions, and document that data here.
+//指定命令行以及http运行的动作
 type Handler struct {
 	// One and only one of the following should be specified.
 	// Exec specifies the action to take.
@@ -1657,7 +1658,7 @@ const (
 	PodRunning PodPhase = "Running"
 	// PodSucceeded means that all containers in the pod have voluntarily terminated
 	// with a container exit code of 0, and the system is not going to restart any of these containers.
-	PodSucceeded PodPhase = "Succeeded"
+	PodSucceeded PodPhase = "Succeeded" //pod中的容器自动停止,kubelet认为该Pod处于Terminated状态,见pkg/kubelet/kubelet_pod中podIsTerminated
 	// PodFailed means that all containers in the pod have terminated, and at least one container has
 	// terminated in a failure (exited with a non-zero exit code or was stopped by the system).
 	PodFailed PodPhase = "Failed"
@@ -3026,6 +3027,7 @@ const (
 	NodeTerminated NodePhase = "Terminated"
 )
 
+//节点健康情况
 type NodeConditionType string
 
 // These are valid conditions of node. Currently, we don't have enough information to decide

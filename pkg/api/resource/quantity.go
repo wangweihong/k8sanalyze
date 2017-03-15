@@ -572,6 +572,7 @@ func (q *Quantity) Sub(y Quantity) {
 
 // Cmp returns 0 if the quantity is equal to y, -1 if the quantity is less than y, or 1 if the
 // quantity is greater than y.
+//比较资源量是否高于指定的资源
 func (q *Quantity) Cmp(y Quantity) int {
 	if q.d.Dec == nil && y.d.Dec == nil {
 		return q.i.Cmp(y.i)

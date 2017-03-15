@@ -283,6 +283,7 @@ func killPodNow(podWorkers PodWorkers, recorder record.EventRecorder) eviction.K
 	return func(pod *v1.Pod, status v1.PodStatus, gracePeriodOverride *int64) error {
 		// determine the grace period to use when killing the pod
 		gracePeriod := int64(0)
+		//如果指定了强制优雅结束时间, 则覆盖pod默认的优雅结束时间
 		if gracePeriodOverride != nil {
 			gracePeriod = *gracePeriodOverride
 		} else if pod.Spec.TerminationGracePeriodSeconds != nil {

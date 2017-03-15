@@ -30,6 +30,7 @@ type PodAdmitAttributes struct {
 
 // PodAdmitResult provides the result of a pod admission decision.
 //pod接收的决定结果
+//见Pkg/kubelet/eviction/evict_mananger.go,实现的PodAmditHandler接口
 type PodAdmitResult struct {
 	// if true, the pod should be admitted.
 	Admit bool
@@ -66,7 +67,7 @@ type PodSyncLoopTarget interface {
 }
 
 // ShouldEvictResponse provides the result of a should evict request.
-//应当退让回应
+//应当驱逐回应
 type ShouldEvictResponse struct {
 	// if true, the pod should be evicted.
 	Evict bool
@@ -77,6 +78,7 @@ type ShouldEvictResponse struct {
 }
 
 // PodSyncHandler is invoked during each sync pod operation.
+//判断一个Pod是否应该被驱逐
 type PodSyncHandler interface {
 	// ShouldEvict is invoked during each sync pod operation to determine
 	// if the pod should be evicted from the kubelet.  If so, the pod status

@@ -45,6 +45,7 @@ const (
 	// inodes, number. internal to this module, used to account for local disk inode consumption.
 	resourceInodes v1.ResourceName = "inodes"
 	// imagefs, in bytes.  internal to this module, used to account for local image filesystem usage.
+	//什么是imagefs?用来存储镜像和容器的可写层
 	resourceImageFs v1.ResourceName = "imagefs"
 	// imagefs inodes, number.  internal to this module, used to account for local image filesystem inodes.
 	resourceImageFsInodes v1.ResourceName = "imagefsInodes"
@@ -65,6 +66,7 @@ var (
 
 func init() {
 	// map eviction signals to node conditions
+	//映射驱逐信号和节点健康状态
 	signalToNodeCondition = map[Signal]v1.NodeConditionType{}
 	signalToNodeCondition[SignalMemoryAvailable] = v1.NodeMemoryPressure
 	signalToNodeCondition[SignalImageFsAvailable] = v1.NodeDiskPressure
@@ -73,6 +75,7 @@ func init() {
 	signalToNodeCondition[SignalNodeFsInodesFree] = v1.NodeDiskPressure
 
 	// map signals to resources (and vice-versa)
+	//映射驱逐信号和资源
 	signalToResource = map[Signal]v1.ResourceName{}
 	signalToResource[SignalMemoryAvailable] = v1.ResourceMemory
 	signalToResource[SignalImageFsAvailable] = resourceImageFs
@@ -86,15 +89,18 @@ func init() {
 }
 
 // validSignal returns true if the signal is supported.
+//检测是否是有效的信号
 func validSignal(signal Signal) bool {
 	_, found := signalToResource[signal]
 	return found
 }
 
 // ParseThresholdConfig parses the flags for thresholds.
+//解析回收阈值配置字符串成阈值对象
 func ParseThresholdConfig(evictionHard, evictionSoft, evictionSoftGracePeriod, evictionMinimumReclaim string) ([]Threshold, error) {
 	results := []Threshold{}
 
+	//将阈值字符串解析成阈值描述符
 	hardThresholds, err := parseThresholdStatements(evictionHard)
 	if err != nil {
 		return nil, err
@@ -113,6 +119,7 @@ func ParseThresholdConfig(evictionHard, evictionSoft, evictionSoftGracePeriod, e
 	if err != nil {
 		return nil, err
 	}
+	//检测
 	for i := range softThresholds {
 		signal := softThresholds[i].Signal
 		period, found := gracePeriods[signal]
@@ -139,6 +146,7 @@ func parseThresholdStatements(expr string) ([]Threshold, error) {
 		return nil, nil
 	}
 	results := []Threshold{}
+	//通过","表达式进行切割
 	statements := strings.Split(expr, ",")
 	signalsFound := sets.NewString()
 	for _, statement := range statements {
@@ -156,6 +164,7 @@ func parseThresholdStatements(expr string) ([]Threshold, error) {
 }
 
 // parseThresholdStatement parses a threshold statement.
+//解析阈值字符串成阈值对象
 func parseThresholdStatement(statement string) (Threshold, error) {
 	tokens2Operator := map[string]ThresholdOperator{
 		"<": OpLessThan,
@@ -180,7 +189,9 @@ func parseThresholdStatement(statement string) (Threshold, error) {
 		return Threshold{}, fmt.Errorf(unsupportedEvictionSignal, signal)
 	}
 
+	//阈值
 	quantityValue := parts[1]
+	//值是否为百分比
 	if strings.HasSuffix(quantityValue, "%") {
 		percentage, err := parsePercentage(quantityValue)
 		if err != nil {
@@ -223,6 +234,7 @@ func parsePercentage(input string) (float32, error) {
 }
 
 // parseGracePeriods parses the grace period statements
+//获得宽限期时间
 func parseGracePeriods(expr string) (map[Signal]time.Duration, error) {
 	if len(expr) == 0 {
 		return nil, nil
@@ -257,6 +269,7 @@ func parseGracePeriods(expr string) (map[Signal]time.Duration, error) {
 }
 
 // parseMinimumReclaims parses the minimum reclaim statements
+//解析最小回收字符串表达式,转换成相应的数值表
 func parseMinimumReclaims(expr string) (map[Signal]ThresholdValue, error) {
 	if len(expr) == 0 {
 		return nil, nil
@@ -352,19 +365,25 @@ func localVolumeNames(pod *v1.Pod) []string {
 }
 
 // podDiskUsage aggregates pod disk usage and inode consumption for the specified stats to measure.
+//根据要计算的文件系统资源统计类型,获取一个Pod的所有容器的相应资源统计
 func podDiskUsage(podStats statsapi.PodStats, pod *v1.Pod, statsToMeasure []fsStatsType) (v1.ResourceList, error) {
 	disk := resource.Quantity{Format: resource.BinarySI}
 	inodes := resource.Quantity{Format: resource.BinarySI}
+	//遍历统计中的所有容器
 	for _, container := range podStats.Containers {
+		// 检测是否要计算Pod容器根文件系统的容量
 		if hasFsStatsType(statsToMeasure, fsStatsRoot) {
+			//添加容器的
 			disk.Add(*diskUsage(container.Rootfs))
 			inodes.Add(*inodeUsage(container.Rootfs))
 		}
+		// 检测是否要计算Pod中容器日志所占用的空间
 		if hasFsStatsType(statsToMeasure, fsStatsLogs) {
 			disk.Add(*diskUsage(container.Logs))
 			inodes.Add(*inodeUsage(container.Logs))
 		}
 	}
+	//是否统计Pod中Volume所占用的空间
 	if hasFsStatsType(statsToMeasure, fsStatsLocalVolumeSource) {
 		volumeNames := localVolumeNames(pod)
 		for _, volumeName := range volumeNames {
@@ -415,8 +434,10 @@ func formatThresholdValue(value ThresholdValue) string {
 }
 
 // cachedStatsFunc returns a statsFunc based on the provided pod stats.
+//将pods的资源统计保存在数组中,
 func cachedStatsFunc(podStats []statsapi.PodStats) statsFunc {
 	uid2PodStats := map[string]statsapi.PodStats{}
+	//遍历pod的资源统计
 	for i := range podStats {
 		uid2PodStats[podStats[i].PodRef.UID] = podStats[i]
 	}
@@ -448,6 +469,7 @@ func (ms *multiSorter) Sort(pods []*v1.Pod) {
 
 // OrderedBy returns a Sorter that sorts using the cmp functions, in order.
 // Call its Sort method to sort the data.
+//使用多个排序器进行排序
 func orderedBy(cmp ...cmpFunc) *multiSorter {
 	return &multiSorter{
 		cmp: cmp,
@@ -468,6 +490,7 @@ func (ms *multiSorter) Swap(i, j int) {
 func (ms *multiSorter) Less(i, j int) bool {
 	p1, p2 := ms.pods[i], ms.pods[j]
 	var k int
+	//遍历所有的比较器
 	for k = 0; k < len(ms.cmp)-1; k++ {
 		cmpResult := ms.cmp[k](p1, p2)
 		// p1 is less than p2
@@ -485,8 +508,9 @@ func (ms *multiSorter) Less(i, j int) bool {
 }
 
 // qosComparator compares pods by QoS (BestEffort < Burstable < Guaranteed)
+//根据两个Pod的QOS进行排序
 func qosComparator(p1, p2 *v1.Pod) int {
-	qosP1 := qos.GetPodQOS(p1)
+	qosP1 := qos.GetPodQOS(p1) //通过判断pod中的容器有没有设置资源request和limit来确定容器的qos
 	qosP2 := qos.GetPodQOS(p2)
 	// its a tie
 	if qosP1 == qosP2 {
@@ -554,6 +578,7 @@ func memory(stats statsFunc) cmpFunc {
 }
 
 // disk compares pods by largest consumer of disk relative to request for the specified disk resource.
+//通过统计函数,获取po的资源统计,并从中获取"root"或者"log"文件系统的容量使用统计.并
 func disk(stats statsFunc, fsStatsToMeasure []fsStatsType, diskResource v1.ResourceName) cmpFunc {
 	return func(p1, p2 *v1.Pod) int {
 		p1Stats, found := stats(p1)
@@ -567,6 +592,7 @@ func disk(stats statsFunc, fsStatsToMeasure []fsStatsType, diskResource v1.Resou
 			return 1
 		}
 		// if we cant get usage for p1 measured, we want p2 first
+		//获取文件系统指定资源类型的统计
 		p1Usage, err := podDiskUsage(p1Stats, p1, fsStatsToMeasure)
 		if err != nil {
 			return -1
@@ -587,11 +613,13 @@ func disk(stats statsFunc, fsStatsToMeasure []fsStatsType, diskResource v1.Resou
 }
 
 // rankMemoryPressure orders the input pods for eviction in response to memory pressure.
+//根据Qos已经以及所使用的内存统计进行排序
 func rankMemoryPressure(pods []*v1.Pod, stats statsFunc) {
 	orderedBy(qosComparator, memory(stats)).Sort(pods)
 }
 
 // rankDiskPressureFunc returns a rankFunc that measures the specified fs stats.
+//根据Qos已经以及所使用的硬盘统计进行排序
 func rankDiskPressureFunc(fsStatsToMeasure []fsStatsType, diskResource v1.ResourceName) rankFunc {
 	return func(pods []*v1.Pod, stats statsFunc) {
 		orderedBy(qosComparator, disk(stats, fsStatsToMeasure, diskResource)).Sort(pods)
@@ -610,6 +638,7 @@ func (a byEvictionPriority) Less(i, j int) bool {
 }
 
 // makeSignalObservations derives observations using the specified summary provider.
+//通过资源统计接口,获取总/可用内存,文件系统容量,文件节点,imagefs容量的统计结果,以及Pod统计的获取函数
 func makeSignalObservations(summaryProvider stats.SummaryProvider) (signalObservations, statsFunc, error) {
 	summary, err := summaryProvider.Get()
 	if err != nil {
@@ -617,10 +646,13 @@ func makeSignalObservations(summaryProvider stats.SummaryProvider) (signalObserv
 	}
 
 	// build the function to work against for pod stats
+	//将资源收集的Pod统计信息,缓存到内存中..返回一个通过PodId返回相应Pod统计的函数
 	statsFunc := cachedStatsFunc(summary.Pods)
 	// build an evaluation context for current eviction signals
+	//用来记录驱逐信号对应的资源统计
 	result := signalObservations{}
 
+	//当前的可用内存和总内存
 	if memory := summary.Node.Memory; memory != nil && memory.AvailableBytes != nil && memory.WorkingSetBytes != nil {
 		result[SignalMemoryAvailable] = signalObservation{
 			available: resource.NewQuantity(int64(*memory.AvailableBytes), resource.BinarySI),
@@ -628,6 +660,7 @@ func makeSignalObservations(summaryProvider stats.SummaryProvider) (signalObserv
 			time:      memory.Time,
 		}
 	}
+	//文件的可用容量和总容量
 	if nodeFs := summary.Node.Fs; nodeFs != nil {
 		if nodeFs.AvailableBytes != nil && nodeFs.CapacityBytes != nil {
 			result[SignalNodeFsAvailable] = signalObservation{
@@ -636,6 +669,7 @@ func makeSignalObservations(summaryProvider stats.SummaryProvider) (signalObserv
 				// TODO: add timestamp to stat (see memory stat)
 			}
 		}
+		//总文件节点和空闲文件节点数
 		if nodeFs.InodesFree != nil && nodeFs.Inodes != nil {
 			result[SignalNodeFsInodesFree] = signalObservation{
 				available: resource.NewQuantity(int64(*nodeFs.InodesFree), resource.BinarySI),
@@ -644,6 +678,7 @@ func makeSignalObservations(summaryProvider stats.SummaryProvider) (signalObserv
 			}
 		}
 	}
+	//imagefs的总容量和可用容量
 	if summary.Node.Runtime != nil {
 		if imageFs := summary.Node.Runtime.ImageFs; imageFs != nil {
 			if imageFs.AvailableBytes != nil && imageFs.CapacityBytes != nil {
@@ -666,10 +701,13 @@ func makeSignalObservations(summaryProvider stats.SummaryProvider) (signalObserv
 }
 
 // thresholdsMet returns the set of thresholds that were met independent of grace period
+//比较驱逐信号值和相应资源统计,返回资源可用量低于阈值的驱逐信号
 func thresholdsMet(thresholds []Threshold, observations signalObservations, enforceMinReclaim bool) []Threshold {
 	results := []Threshold{}
+	//遍历所有的阈值,如出现在获取的资源统计中,
 	for i := range thresholds {
 		threshold := thresholds[i]
+		//阈值信号对应的资源统计
 		observed, found := observations[threshold.Signal]
 		if !found {
 			glog.Warningf("eviction manager: no observation found for eviction signal %v", threshold.Signal)
@@ -677,14 +715,18 @@ func thresholdsMet(thresholds []Threshold, observations signalObservations, enfo
 		}
 		// determine if we have met the specified threshold
 		thresholdMet := false
+		//获取阈值,如果是数值返回相应数值,如果是百分比,返回资源统计的容量*百分比,来获取相应的阈值
 		quantity := getThresholdQuantity(threshold.Value, observed.capacity)
 		// if enforceMinReclaim is specified, we compare relative to value - minreclaim
+		//如果指定了强制最小回收,最小回收数量,则将最小回收量添加到阈值上
 		if enforceMinReclaim && threshold.MinReclaim != nil {
 			quantity.Add(*getThresholdQuantity(*threshold.MinReclaim, observed.capacity))
 		}
+		//如果阈值高于当前资源的可用量
 		thresholdResult := quantity.Cmp(*observed.available)
 		switch threshold.Operator {
 		case OpLessThan:
+			//标记已经遇到了阈值
 			thresholdMet = thresholdResult > 0
 		}
 		if thresholdMet {
@@ -694,6 +736,7 @@ func thresholdsMet(thresholds []Threshold, observations signalObservations, enfo
 	return results
 }
 
+//当前资源观察比上一次资源观察时间晚的资源的阈值
 func thresholdsUpdatedStats(thresholds []Threshold, observations, lastObservations signalObservations) []Threshold {
 	results := []Threshold{}
 	for i := range thresholds {
@@ -704,6 +747,7 @@ func thresholdsUpdatedStats(thresholds []Threshold, observations, lastObservatio
 			continue
 		}
 		last, found := lastObservations[threshold.Signal]
+		//当前观察的资源统计时间晚于上次资源统计时间
 		if !found || observed.time.IsZero() || observed.time.After(last.time.Time) {
 			results = append(results, threshold)
 		}
@@ -712,6 +756,7 @@ func thresholdsUpdatedStats(thresholds []Threshold, observations, lastObservatio
 }
 
 // getThresholdQuantity returns the expected quantity value for a thresholdValue
+//如果阈值是数值,则返回数值,否则返回资源容量*阈值中的百分比
 func getThresholdQuantity(value ThresholdValue, capacity *resource.Quantity) *resource.Quantity {
 	if value.Quantity != nil {
 		return value.Quantity.Copy()
@@ -720,6 +765,7 @@ func getThresholdQuantity(value ThresholdValue, capacity *resource.Quantity) *re
 }
 
 // thresholdsFirstObservedAt merges the input set of thresholds with the previous observation to determine when active set of thresholds were initially met.
+// 返回阈值信号表中的观察时间,如果是第一次观察到,则设置观察时间为now; 如果上次已经观察到,返回上一次观察时间
 func thresholdsFirstObservedAt(thresholds []Threshold, lastObservedAt thresholdsObservedAt, now time.Time) thresholdsObservedAt {
 	results := thresholdsObservedAt{}
 	for i := range thresholds {
@@ -733,6 +779,7 @@ func thresholdsFirstObservedAt(thresholds []Threshold, lastObservedAt thresholds
 }
 
 // thresholdsMetGracePeriod returns the set of thresholds that have satisfied associated grace period
+// 返回观察的阈值信号表中,信号观察时间距离当前时间大于阈值宽限期的阈值信号
 func thresholdsMetGracePeriod(observedAt thresholdsObservedAt, now time.Time) []Threshold {
 	results := []Threshold{}
 	for threshold, at := range observedAt {
@@ -747,6 +794,7 @@ func thresholdsMetGracePeriod(observedAt thresholdsObservedAt, now time.Time) []
 }
 
 // nodeConditions returns the set of node conditions associated with a threshold
+//根据阈值,生成相应的nodeCondtion
 func nodeConditions(thresholds []Threshold) []v1.NodeConditionType {
 	results := []v1.NodeConditionType{}
 	for _, threshold := range thresholds {
@@ -760,6 +808,7 @@ func nodeConditions(thresholds []Threshold) []v1.NodeConditionType {
 }
 
 // nodeConditionsLastObservedAt merges the input with the previous observation to determine when a condition was most recently met.
+//设置节点状况表的观察时间为now,合并上一次节点状况表中不存在当前表的节点状况
 func nodeConditionsLastObservedAt(nodeConditions []v1.NodeConditionType, lastObservedAt nodeConditionsObservedAt, now time.Time) nodeConditionsObservedAt {
 	results := nodeConditionsObservedAt{}
 	// the input conditions were observed "now"
@@ -777,8 +826,10 @@ func nodeConditionsLastObservedAt(nodeConditions []v1.NodeConditionType, lastObs
 }
 
 // nodeConditionsObservedSince returns the set of conditions that have been observed within the specified period
+//返回所有被观察时间距当前时间 小于指定周期的节点条件
 func nodeConditionsObservedSince(observedAt nodeConditionsObservedAt, period time.Duration, now time.Time) []v1.NodeConditionType {
 	results := []v1.NodeConditionType{}
+	//遍历所有观察到的节点条件,
 	for nodeCondition, at := range observedAt {
 		duration := now.Sub(at)
 		if duration < period {
@@ -844,6 +895,7 @@ func compareThresholdValue(a ThresholdValue, b ThresholdValue) bool {
 }
 
 // getStarvedResources returns the set of resources that are starved based on thresholds met.
+//根据阈值信号,找到对应触发阈值信号的资源
 func getStarvedResources(thresholds []Threshold) []v1.ResourceName {
 	results := []v1.ResourceName{}
 	for _, threshold := range thresholds {
@@ -855,6 +907,7 @@ func getStarvedResources(thresholds []Threshold) []v1.ResourceName {
 }
 
 // isSoftEviction returns true if the thresholds met for the starved resource are only soft thresholds
+//找到饥饿资源对应的阈值信号,确认其是软信号,还是硬信号
 func isSoftEvictionThresholds(thresholds []Threshold, starvedResource v1.ResourceName) bool {
 	for _, threshold := range thresholds {
 		if resourceToCheck := signalToResource[threshold.Signal]; resourceToCheck != starvedResource {
@@ -868,11 +921,13 @@ func isSoftEvictionThresholds(thresholds []Threshold, starvedResource v1.Resourc
 }
 
 // isSoftEviction returns true if the thresholds met for the starved resource are only soft thresholds
+//没有设置优雅回收时间的阈值,是硬回收阈值.(这在Kubelet启动时配置)
 func isHardEvictionThreshold(threshold Threshold) bool {
 	return threshold.GracePeriod == time.Duration(0)
 }
 
 // buildResourceToRankFunc returns ranking functions associated with resources
+//构建每个资源的排序函数
 func buildResourceToRankFunc(withImageFs bool) map[v1.ResourceName]rankFunc {
 	resourceToRankFunc := map[v1.ResourceName]rankFunc{
 		v1.ResourceMemory: rankMemoryPressure,
@@ -897,6 +952,7 @@ func buildResourceToRankFunc(withImageFs bool) map[v1.ResourceName]rankFunc {
 }
 
 // PodIsEvicted returns true if the reported pod status is due to an eviction.
+//根据Pod状态中的原因为"Evicted"来判定一个Pod是否
 func PodIsEvicted(podStatus v1.PodStatus) bool {
 	return podStatus.Phase == v1.PodFailed && podStatus.Reason == reason
 }
@@ -932,6 +988,7 @@ func deleteLogs() nodeReclaimFunc {
 }
 
 // deleteImages will delete unused images to free up disk pressure.
+//调用镜像垃圾回收器,回收无用的镜像
 func deleteImages(imageGC ImageGC, reportBytesFreed bool) nodeReclaimFunc {
 	return func() (*resource.Quantity, error) {
 		glog.Infof("eviction manager: attempting to delete unused images")

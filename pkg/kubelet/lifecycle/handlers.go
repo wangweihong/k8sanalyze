@@ -43,6 +43,7 @@ type podStatusProvider interface {
 	GetPodStatus(uid types.UID, name, namespace string) (*kubecontainer.PodStatus, error)
 }
 
+//被kuberuntimeManager调用
 func NewHandlerRunner(httpGetter kubetypes.HttpGetter, commandRunner kubecontainer.ContainerCommandRunner, containerManager podStatusProvider) kubecontainer.HandlerRunner {
 	return &HandlerRunner{
 		httpGetter:       httpGetter,
@@ -51,11 +52,13 @@ func NewHandlerRunner(httpGetter kubetypes.HttpGetter, commandRunner kubecontain
 	}
 }
 
+//根据handler所指定的动作,运行相应的动作
 func (hr *HandlerRunner) Run(containerID kubecontainer.ContainerID, pod *v1.Pod, container *v1.Container, handler *v1.Handler) (string, error) {
 	switch {
 	case handler.Exec != nil:
 		var msg string
 		// TODO(timstclair): Pass a proper timeout value.
+		//在指定容器运行指定的命令
 		output, err := hr.commandRunner.RunInContainer(containerID, handler.Exec.Command, 0)
 		if err != nil {
 			msg := fmt.Sprintf("Exec lifecycle hook (%v) for Container %q in Pod %q failed - error: %v, message: %q", handler.Exec.Command, container.Name, format.Pod(pod), err, string(output))
@@ -103,6 +106,7 @@ func resolvePort(portReference intstr.IntOrString, container *v1.Container) (int
 func (hr *HandlerRunner) runHTTPHandler(pod *v1.Pod, container *v1.Container, handler *v1.Handler) (string, error) {
 	host := handler.HTTPGet.Host
 	if len(host) == 0 {
+		//获取容器的状态?
 		status, err := hr.containerManager.GetPodStatus(pod.UID, pod.Name, pod.Namespace)
 		if err != nil {
 			glog.Errorf("Unable to get pod info, event handlers may be invalid.")

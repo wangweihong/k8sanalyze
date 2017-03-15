@@ -361,16 +361,17 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		RootFreeDiskMB:   int(kubeCfg.LowDiskSpaceThresholdMB),
 	}
 
-	//驱逐什么?驱逐Pod?
+	//回收pod资源,下面的EvictHard/EvicionSoft..等参数都有kubelet的启动参数提供
 	thresholds, err := eviction.ParseThresholdConfig(kubeCfg.EvictionHard, kubeCfg.EvictionSoft, kubeCfg.EvictionSoftGracePeriod, kubeCfg.EvictionMinimumReclaim)
 	if err != nil {
 		return nil, err
 	}
+	//回收配置
 	evictionConfig := eviction.Config{
-		PressureTransitionPeriod: kubeCfg.EvictionPressureTransitionPeriod.Duration,
-		MaxPodGracePeriodSeconds: int64(kubeCfg.EvictionMaxPodGracePeriod),
+		PressureTransitionPeriod: kubeCfg.EvictionPressureTransitionPeriod.Duration, //由kubelet的启动参数--eviction-pressure-transition-period 提供
+		MaxPodGracePeriodSeconds: int64(kubeCfg.EvictionMaxPodGracePeriod),          //有kubelet的启动参数--eviction-max-pod-grace-period提供
 		Thresholds:               thresholds,
-		KernelMemcgNotification:  kubeCfg.ExperimentalKernelMemcgNotification,
+		KernelMemcgNotification:  kubeCfg.ExperimentalKernelMemcgNotification, //由kubelet的启动参数--experimental-kernel-memcg-notification提供
 	}
 
 	//用于记录kubelet和非kubelet组件保留的资源数量,达到了资源上限,将会做什么样的处理?
@@ -868,7 +869,7 @@ type Kubelet struct {
 	rootDirectory string //这个根目录默认路径是什么?/var/lib/kubelet?
 
 	// podWorkers handle syncing Pods in response to events.
-	podWorkers PodWorkers
+	podWorkers PodWorkers //
 
 	// resyncInterval is the interval between periodic full reconciliations of
 	// pods on this node.
@@ -1266,6 +1267,7 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 		glog.Fatalf("Failed to start cAdvisor %v", err)
 	}
 	// eviction manager must start after cadvisor because it needs to know if the container runtime has a dedicated imagefs
+	//驱逐管理器只会对没有处于终止状态的Pod驱逐决策, 不对StaticPod进行驱逐决策
 	kl.evictionManager.Start(kl, kl.getActivePods, evictionMonitoringPeriod)
 }
 

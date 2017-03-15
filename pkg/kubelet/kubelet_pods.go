@@ -74,6 +74,7 @@ func (kl *Kubelet) listPodsFromDisk() ([]types.UID, error) {
 }
 
 // getActivePods returns non-terminal pods
+//获取不处于终止状态的Pod(Pod.Status.Phase不为Successed或者Failed的Pod)
 func (kl *Kubelet) getActivePods() []*v1.Pod {
 	allPods := kl.podManager.GetPods()
 	activePods := kl.filterOutTerminatedPods(allPods)
@@ -676,6 +677,7 @@ func (kl *Kubelet) podIsTerminated(pod *v1.Pod) bool {
 
 // filterOutTerminatedPods returns the given pods which the status manager
 // does not consider failed or succeeded.
+//过滤出处于终止状态的Pod
 func (kl *Kubelet) filterOutTerminatedPods(pods []*v1.Pod) []*v1.Pod {
 	var filteredPods []*v1.Pod
 	for _, p := range pods {

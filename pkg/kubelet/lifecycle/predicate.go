@@ -33,6 +33,7 @@ type predicateAdmitHandler struct {
 
 var _ PodAdmitHandler = &predicateAdmitHandler{}
 
+//参数由kubelet对象的getNodeAnyWay实现
 func NewPredicateAdmitHandler(getNodeAnyWayFunc getNodeAnyWayFuncType) *predicateAdmitHandler {
 	return &predicateAdmitHandler{
 		getNodeAnyWayFunc,
@@ -40,6 +41,7 @@ func NewPredicateAdmitHandler(getNodeAnyWayFunc getNodeAnyWayFuncType) *predicat
 }
 
 func (w *predicateAdmitHandler) Admit(attrs *PodAdmitAttributes) PodAdmitResult {
+	//获取当前kubelet所在节点的信息
 	node, err := w.getNodeAnyWayFunc()
 	if err != nil {
 		glog.Errorf("Cannot get Node info: %v", err)
@@ -51,8 +53,10 @@ func (w *predicateAdmitHandler) Admit(attrs *PodAdmitAttributes) PodAdmitResult 
 	}
 	pod := attrs.Pod
 	pods := attrs.OtherPods
+	//??
 	nodeInfo := schedulercache.NewNodeInfo(pods...)
 	nodeInfo.SetNode(node)
+	//??这里为什么涉及调度器的算法?
 	fit, reasons, err := predicates.GeneralPredicates(pod, nil, nodeInfo)
 	if err != nil {
 		message := fmt.Sprintf("GeneralPredicates failed due to %v, which is unexpected.", err)

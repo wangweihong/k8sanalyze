@@ -92,6 +92,7 @@ type PodStats struct {
 }
 
 // ContainerStats holds container-level unprocessed sample stats.
+//容器的统计
 type ContainerStats struct {
 	// Reference to the measured container.
 	Name string `json:"name"`
@@ -106,11 +107,11 @@ type ContainerStats struct {
 	// Stats pertaining to container rootfs usage of filesystem resources.
 	// Rootfs.UsedBytes is the number of bytes used for the container write layer.
 	// +optional
-	Rootfs *FsStats `json:"rootfs,omitempty"`
+	Rootfs *FsStats `json:"rootfs,omitempty"` //Pod中容器根文件系统所占的空间
 	// Stats pertaining to container logs usage of filesystem resources.
 	// Logs.UsedBytes is the number of bytes used for the container logs.
 	// +optional
-	Logs *FsStats `json:"logs,omitempty"`
+	Logs *FsStats `json:"logs,omitempty"` //Pod中容器日志所占的磁盘空间
 	// User defined metrics that are exposed by containers in the pod. Typically, we expect only one container in the pod to be exposing user defined metrics. In the event of multiple containers exposing metrics, they will be combined here.
 	UserDefinedMetrics []UserDefinedMetric `json:"userDefinedMetrics,omitmepty" patchStrategy:"merge" patchMergeKey:"name"`
 }
