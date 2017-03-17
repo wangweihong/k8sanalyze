@@ -48,6 +48,7 @@ const (
 
 // effectiveHairpinMode determines the effective hairpin mode given the
 // configured mode, container runtime, and whether cbr0 should be configured.
+//bridge hairpin(发夹)模式
 func effectiveHairpinMode(hairpinMode componentconfig.HairpinMode, containerRuntime string, networkPlugin string) (componentconfig.HairpinMode, error) {
 	// The hairpin mode setting doesn't matter if:
 	// - We're not using a bridge network. This is hard to check because we might

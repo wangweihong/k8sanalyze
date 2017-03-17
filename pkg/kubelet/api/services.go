@@ -30,6 +30,7 @@ type RuntimeVersioner interface {
 
 // ContainerManager contains methods to manipulate containers managed by a
 // container runtime. The methods are thread-safe.
+//容器运行时管理器
 type ContainerManager interface {
 	// CreateContainer creates a new container in specified PodSandbox.
 	CreateContainer(podSandboxID string, config *runtimeapi.ContainerConfig, sandboxConfig *runtimeapi.PodSandboxConfig) (string, error)
@@ -54,6 +55,7 @@ type ContainerManager interface {
 
 // PodSandboxManager contains methods for operating on PodSandboxes. The methods
 // are thread-safe.
+//Pod沙盒管理器
 type PodSandboxManager interface {
 	// RunPodSandbox creates and starts a pod-level sandbox. Runtimes should ensure
 	// the sandbox is in ready state.
@@ -74,6 +76,7 @@ type PodSandboxManager interface {
 
 // RuntimeService interface should be implemented by a container runtime.
 // The methods should be thread-safe.
+// 容器运行时需的管理接口
 type RuntimeService interface {
 	RuntimeVersioner
 	ContainerManager

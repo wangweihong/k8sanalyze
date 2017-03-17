@@ -17,7 +17,7 @@ limitations under the License.
 package types
 
 const (
-	KubernetesPodNameLabel       = "io.kubernetes.pod.name"
+	KubernetesPodNameLabel       = "io.kubernetes.pod.name" //这些annotation什么时候使用?没见到这里的使用?
 	KubernetesPodNamespaceLabel  = "io.kubernetes.pod.namespace"
 	KubernetesPodUIDLabel        = "io.kubernetes.pod.uid"
 	KubernetesContainerNameLabel = "io.kubernetes.container.name"

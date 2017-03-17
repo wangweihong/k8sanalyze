@@ -31,14 +31,14 @@ import (
 const (
 	// TODO: move those label definitions to kubelet/types/labels.go
 	// TODO: change those label names to follow kubernetes's format
-	podDeletionGracePeriodLabel    = "io.kubernetes.pod.deletionGracePeriod"
+	podDeletionGracePeriodLabel    = "io.kubernetes.pod.deletionGracePeriod" //添加这些label的作用
 	podTerminationGracePeriodLabel = "io.kubernetes.pod.terminationGracePeriod"
 
 	containerHashLabel                   = "io.kubernetes.container.hash"
-	containerRestartCountLabel           = "io.kubernetes.container.restartCount"
-	containerTerminationMessagePathLabel = "io.kubernetes.container.terminationMessagePath"
+	containerRestartCountLabel           = "io.kubernetes.container.restartCount"           //容器重启计数?看了启动的pod,pod中并没有该annotation?
+	containerTerminationMessagePathLabel = "io.kubernetes.container.terminationMessagePath" //??
 	containerPreStopHandlerLabel         = "io.kubernetes.container.preStopHandler"
-	containerPortsLabel                  = "io.kubernetes.container.ports"
+	containerPortsLabel                  = "io.kubernetes.container.ports" //容器端口?
 
 	// kubernetesManagedLabel is used to distinguish whether a container/sandbox is managed by kubelet or not
 	kubernetesManagedLabel = "io.kubernetes.managed"
@@ -75,6 +75,7 @@ type annotatedContainerInfo struct {
 }
 
 // newPodLabels creates pod labels from v1.Pod.
+//获取pod的标签,并添加新的标签
 func newPodLabels(pod *v1.Pod) map[string]string {
 	labels := map[string]string{}
 
@@ -97,6 +98,7 @@ func newPodAnnotations(pod *v1.Pod) map[string]string {
 }
 
 // newContainerLabels creates container labels from v1.Container and v1.Pod.
+//从容器和Pod中创建新的标签
 func newContainerLabels(container *v1.Container, pod *v1.Pod) map[string]string {
 	labels := map[string]string{}
 	labels[types.KubernetesPodNameLabel] = pod.Name
