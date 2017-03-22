@@ -802,6 +802,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize eviction manager: %v", err)
 	}
+	//驱逐管理器
 	klet.evictionManager = evictionManager
 	klet.admitHandlers.AddPodAdmitHandler(evictionAdmitHandler)
 
@@ -826,11 +827,14 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	klet.admitHandlers.AddPodAdmitHandler(unsafeWhitelist)
 
 	// enable active deadline handler
+	//注册pod 死亡期限控制器,设定deadline的容器在deadline到达后,将会移除其中的容器
 	activeDeadlineHandler, err := newActiveDeadlineHandler(klet.statusManager, kubeDeps.Recorder, klet.clock)
 	if err != nil {
 		return nil, err
 	}
+	//将activeDeadlineHandler添加到PodSyncDeadlineHandler控制器集中
 	klet.AddPodSyncLoopHandler(activeDeadlineHandler)
+	//将activeDeadlineHandler添加到PodSyncHandler控制器集中
 	klet.AddPodSyncHandler(activeDeadlineHandler)
 
 	klet.admitHandlers.AddPodAdmitHandler(lifecycle.NewPredicateAdmitHandler(klet.getNodeAnyWay))
@@ -965,7 +969,7 @@ type Kubelet struct {
 	machineInfo *cadvisorapi.MachineInfo
 
 	// Syncs pods statuses with apiserver; also used as a cache of statuses.
-	// 同步Pod的状态
+	// 通过apiserver获取容器的状态?
 	statusManager status.Manager
 
 	// VolumeManager runs a set of asynchronous loops that figure out which

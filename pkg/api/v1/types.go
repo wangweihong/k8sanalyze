@@ -2075,6 +2075,7 @@ type PodSpec struct {
 	// StartTime before the system will actively try to mark it failed and kill associated containers.
 	// Value must be a positive integer.
 	// +optional
+	//设置容器的deadline,超过时间,该pod将会处于DeadlineExceed状态
 	ActiveDeadlineSeconds *int64 `json:"activeDeadlineSeconds,omitempty" protobuf:"varint,5,opt,name=activeDeadlineSeconds"`
 	// Set DNS policy for containers within the pod.
 	// One of 'ClusterFirst' or 'Default'.
