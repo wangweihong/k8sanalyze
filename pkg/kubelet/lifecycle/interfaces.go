@@ -64,6 +64,7 @@ type PodSyncLoopTarget interface {
 }
 
 // ShouldEvictResponse provides the result of a should evict request.
+//是否驱逐请求
 type ShouldEvictResponse struct {
 	// if true, the pod should be evicted.
 	Evict bool
