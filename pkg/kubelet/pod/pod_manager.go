@@ -40,12 +40,13 @@ import (
 // pod. When a static pod gets deleted, the associated orphaned mirror pod
 // will also be removed.
 //不是由api创建的pod成为static pod, kubelet会在api server中创建一个与之映射的Mirror pod来维护该static pod的状态.
+//这个kubelet管理其拥有的pod?
 type Manager interface {
 	// GetPods returns the regular pods bound to the kubelet and their spec.
-	GetPods() []*v1.Pod
+	GetPods() []*v1.Pod //???这个regular pod包括mirror pod吗?应该不包括,下面还有格GetPodsAndMirrorPods的接口
 	// GetPodByName returns the (non-mirror) pod that matches full name, as well as
 	// whether the pod was found.
-	GetPodByFullName(podFullName string) (*v1.Pod, bool)
+	GetPodByFullName(podFullName string) (*v1.Pod, bool) //注意这里PodFullName,应该是包含了namespace, podFullName = pod + "_" + namespae
 	// GetPodByName provides the (non-mirror) pod that matches namespace and
 	// name, as well as whether the pod was found.
 	GetPodByName(namespace, name string) (*v1.Pod, bool)

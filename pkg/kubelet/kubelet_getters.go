@@ -37,12 +37,14 @@ import (
 // store data.  These functions are useful to pass interfaces to other modules
 // that may need to know where to write data without getting a whole kubelet
 // instance.
+//获取kubelet存放数据的根目录
 func (kl *Kubelet) getRootDir() string {
 	return kl.rootDirectory
 }
 
 // getPodsDir returns the full path to the directory under which pod
 // directories are created.
+//获取kubelet存放的Pod数据的目录
 func (kl *Kubelet) getPodsDir() string {
 	return path.Join(kl.getRootDir(), options.DefaultKubeletPodsDirName)
 }
@@ -51,6 +53,8 @@ func (kl *Kubelet) getPodsDir() string {
 // directories are created.  Plugins can use these directories for data that
 // they need to persist.  Plugins should create subdirectories under this named
 // after their own names.
+//获取kubelet存放的plugins数据的目录.怎么安装插件, 有些哪些插件可以安装
+//https://kubernetes.io/docs/concepts/cluster-administration/network-plugins/
 func (kl *Kubelet) getPluginsDir() string {
 	return path.Join(kl.getRootDir(), options.DefaultKubeletPluginsDirName)
 }
@@ -58,12 +62,14 @@ func (kl *Kubelet) getPluginsDir() string {
 // getPluginDir returns a data directory name for a given plugin name.
 // Plugins can use these directories to store data that they need to persist.
 // For per-pod plugin data, see getPodPluginDir.
+//获取kubelet指定插件的目录
 func (kl *Kubelet) getPluginDir(pluginName string) string {
 	return path.Join(kl.getPluginsDir(), pluginName)
 }
 
 // GetPodDir returns the full path to the per-pod data directory for the
 // specified pod. This directory may not exist if the pod does not exist.
+//获取指定pod的目录
 func (kl *Kubelet) GetPodDir(podUID types.UID) string {
 	return kl.getPodDir(podUID)
 }
@@ -143,6 +149,7 @@ func (kl *Kubelet) getPodContainerDir(podUID types.UID, ctrName string) string {
 
 // GetPods returns all pods bound to the kubelet and their spec, and the mirror
 // pods.
+//获取kubelet上绑定的正常pods
 func (kl *Kubelet) GetPods() []*v1.Pod {
 	return kl.podManager.GetPods()
 }
@@ -151,6 +158,7 @@ func (kl *Kubelet) GetPods() []*v1.Pod {
 // container runtime cache. This function converts kubecontainer.Pod to
 // v1.Pod, so only the fields that exist in both kubecontainer.Pod and
 // v1.Pod are considered meaningful.
+//获取kubelet运行时缓存中记录的所有Pod, 转换成api pod,并返回
 func (kl *Kubelet) GetRunningPods() ([]*v1.Pod, error) {
 	pods, err := kl.runtimeCache.GetPods()
 	if err != nil {
@@ -166,6 +174,7 @@ func (kl *Kubelet) GetRunningPods() ([]*v1.Pod, error) {
 
 // GetPodByFullName gets the pod with the given 'full' name, which
 // incorporates the namespace as well as whether the pod was found.
+//由上面来看, podFullName中包含了namespace, podFullName = pod + "_" + namespace
 func (kl *Kubelet) GetPodByFullName(podFullName string) (*v1.Pod, bool) {
 	return kl.podManager.GetPodByFullName(podFullName)
 }
@@ -188,6 +197,7 @@ func (kl *Kubelet) GetRuntime() kubecontainer.Runtime {
 }
 
 // GetNode returns the node info for the configured node name of this Kubelet.
+//??kubelet的节点名和主机名的区别,主机名通过uname -n获取,可以通过--host-override来修改,nodename是kubelet提供给apiserver节点的名字,通常等于hostname
 func (kl *Kubelet) GetNode() (*v1.Node, error) {
 	if kl.standaloneMode {
 		return kl.initialNode()
@@ -200,12 +210,15 @@ func (kl *Kubelet) GetNode() (*v1.Node, error) {
 // Return kubelet's nodeInfo for this node, except on error or if in standalone mode,
 // in which case return a manufactured nodeInfo representing a node with no pods,
 // zero capacity, and the default labels.
+//
 func (kl *Kubelet) getNodeAnyWay() (*v1.Node, error) {
+	// 如果kubelet是standalone模式,则获取相应节点的信息
 	if !kl.standaloneMode {
 		if n, err := kl.nodeInfo.GetNodeInfo(string(kl.nodeName)); err == nil {
 			return n, nil
 		}
 	}
+	//否则根据kubelet创建一个api node
 	return kl.initialNode()
 }
 

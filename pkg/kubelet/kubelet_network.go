@@ -93,6 +93,7 @@ func (kl *Kubelet) providerRequiresNetworkingConfiguration() bool {
 // parseResolveConf reads a resolv.conf file from the given reader, and parses
 // it into nameservers and searches, possibly returning an error.
 // TODO: move to utility package
+//解析域名解析配置文件
 func (kl *Kubelet) parseResolvConf(reader io.Reader) (nameservers []string, searches []string, err error) {
 	file, err := ioutil.ReadAll(reader)
 	if err != nil {
@@ -188,6 +189,7 @@ func (kl *Kubelet) syncNetworkStatus() {
 // updatePodCIDR updates the pod CIDR in the runtime state if it is different
 // from the current CIDR.
 func (kl *Kubelet) updatePodCIDR(cidr string) {
+	//???
 	podCIDR := kl.runtimeState.podCIDR()
 
 	if podCIDR == cidr {

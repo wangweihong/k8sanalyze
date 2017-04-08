@@ -25,8 +25,10 @@ import (
 
 // GeneratePodReadyCondition returns ready condition if all containers in a pod are ready, else it
 // returns an unready condition.
+//生成pod准备状态?
 func GeneratePodReadyCondition(spec *v1.PodSpec, containerStatuses []v1.ContainerStatus, podPhase v1.PodPhase) v1.PodCondition {
 	// Find if all containers are ready or not.
+	//pod的容器状态列表
 	if containerStatuses == nil {
 		return v1.PodCondition{
 			Type:   v1.PodReady,
@@ -36,21 +38,25 @@ func GeneratePodReadyCondition(spec *v1.PodSpec, containerStatuses []v1.Containe
 	}
 	unknownContainers := []string{}
 	unreadyContainers := []string{}
+	//遍历所有的容器
 	for _, container := range spec.Containers {
+		//获取指定容器的让你哦改期状态,如果容器状态没有设置Ready,添加容器到unreadyContainers列表中
 		if containerStatus, ok := v1.GetContainerStatus(containerStatuses, container.Name); ok {
 			if !containerStatus.Ready {
 				unreadyContainers = append(unreadyContainers, container.Name)
 			}
+			//如果有有容器没有容器状态,则添加到未知容器列表
 		} else {
 			unknownContainers = append(unknownContainers, container.Name)
 		}
 	}
 
 	// If all containers are known and succeeded, just return PodCompleted.
+	//如果容器处于已成功阶段且不存在未知的容器
 	if podPhase == v1.PodSucceeded && len(unknownContainers) == 0 {
 		return v1.PodCondition{
 			Type:   v1.PodReady,
-			Status: v1.ConditionFalse,
+			Status: v1.ConditionFalse, ///???为什么返回这个?
 			Reason: "PodCompleted",
 		}
 	}
@@ -80,6 +86,7 @@ func GeneratePodReadyCondition(spec *v1.PodSpec, containerStatuses []v1.Containe
 
 // GeneratePodInitializedCondition returns initialized condition if all init containers in a pod are ready, else it
 // returns an uninitialized condition.
+//生成pod init容器的状态
 func GeneratePodInitializedCondition(spec *v1.PodSpec, containerStatuses []v1.ContainerStatus, podPhase v1.PodPhase) v1.PodCondition {
 	// Find if all containers are ready or not.
 	if containerStatuses == nil && len(spec.InitContainers) > 0 {

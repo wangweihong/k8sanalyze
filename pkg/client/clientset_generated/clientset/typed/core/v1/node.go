@@ -40,7 +40,7 @@ type NodeInterface interface {
 	Get(name string, options meta_v1.GetOptions) (*v1.Node, error)
 	List(opts v1.ListOptions) (*v1.NodeList, error)
 	Watch(opts v1.ListOptions) (watch.Interface, error)
-	Patch(name string, pt api.PatchType, data []byte, subresources ...string) (result *v1.Node, err error)
+	Patch(name string, pt api.PatchType, data []byte, subresources ...string) (result *v1.Node, err error) //???patch和update有什么不同?更新一个资源的某些字段,资源的uuid不变?
 	NodeExpansion
 }
 

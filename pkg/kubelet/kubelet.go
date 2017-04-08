@@ -361,12 +361,12 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		RootFreeDiskMB:   int(kubeCfg.LowDiskSpaceThresholdMB),
 	}
 
-	//回收pod资源,下面的EvictHard/EvicionSoft..等参数都有kubelet的启动参数提供
+	//驱逐pod资源,下面的EvictHard/EvicionSoft..等参数都有kubelet的启动参数提供
 	thresholds, err := eviction.ParseThresholdConfig(kubeCfg.EvictionHard, kubeCfg.EvictionSoft, kubeCfg.EvictionSoftGracePeriod, kubeCfg.EvictionMinimumReclaim)
 	if err != nil {
 		return nil, err
 	}
-	//回收配置
+	//驱逐配置
 	evictionConfig := eviction.Config{
 		PressureTransitionPeriod: kubeCfg.EvictionPressureTransitionPeriod.Duration, //由kubelet的启动参数--eviction-pressure-transition-period 提供
 		MaxPodGracePeriodSeconds: int64(kubeCfg.EvictionMaxPodGracePeriod),          //有kubelet的启动参数--eviction-max-pod-grace-period提供
@@ -747,7 +747,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	}
 	klet.imageManager = imageManager
 
-	//用于管理Pod的状态?
+	//用于管理Pod的状态?用于同步api server中pod的状态
 	klet.statusManager = status.NewManager(kubeClient, klet.podManager)
 
 	//liveness, readiess
@@ -797,6 +797,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	klet.setNodeStatusFuncs = klet.defaultNodeStatusFuncs()
 
 	// setup eviction manager
+	//安装驱逐管理器
 	evictionManager, evictionAdmitHandler, err := eviction.NewManager(klet.resourceAnalyzer, evictionConfig, killPodNow(klet.podWorkers, kubeDeps.Recorder), klet.imageManager, kubeDeps.Recorder, nodeRef, klet.clock)
 
 	if err != nil {
@@ -864,13 +865,13 @@ type nodeLister interface {
 type Kubelet struct {
 	kubeletConfiguration componentconfig.KubeletConfiguration
 
-	hostname      string
-	nodeName      types.NodeName
+	hostname      string         //主机名通常是uname -n,但可以通过kubelet的启动参数--host-override来修改
+	nodeName      types.NodeName //kubelet提供给apiserver的节点名,通常值为hostname,见types.NodeName的定义
 	dockerClient  dockertools.DockerInterface
 	runtimeCache  kubecontainer.RuntimeCache
 	kubeClient    clientset.Interface
 	iptClient     utilipt.Interface
-	rootDirectory string //这个根目录默认路径是什么?/var/lib/kubelet?
+	rootDirectory string //这个根目录默认路径是什么?/var/lib/kubelet? 对,由kubelet的启动参数--root-dir来配置,默认就是/var/lib/kubelet
 
 	// podWorkers handle syncing Pods in response to events.
 	podWorkers PodWorkers //
@@ -904,11 +905,11 @@ type Kubelet struct {
 	cadvisor cadvisor.Interface
 
 	// Set to true to have the node register itself with the apiserver.
-	registerNode bool
+	registerNode bool //用来决定是否自动注册到api server, 由启动参数--register-node来决定;如果指定了--api-servers启动参数,默认设置了--register-node
 	// Set to true to have the node register itself as schedulable.
-	registerSchedulable bool
+	registerSchedulable bool //一个节点是否注册为可调度
 	// for internal book keeping; access only from within registerWithApiserver
-	registrationCompleted bool
+	registrationCompleted bool // 用来标记kubelet是否向api server注册.见kubelet_node_status.go的registerWithApiServer
 
 	// Set to true if the kubelet is in standalone mode (i.e. setup without an apiserver)
 	standaloneMode bool
@@ -920,7 +921,7 @@ type Kubelet struct {
 	clusterDNS net.IP
 
 	// masterServiceNamespace is the namespace that the master service is exposed in.
-	masterServiceNamespace string
+	masterServiceNamespace string //Kube-system ?不是,该值由kubelet启动参数--master-service-namespace设置,默认为"default".只在kubelet_pod.go中的getServiceEnvVarMap使用
 	// serviceLister knows how to list services
 	//提供了一个利用k8s client访问api server中的service资源
 	serviceLister serviceLister
@@ -936,7 +937,7 @@ type Kubelet struct {
 
 	// Last timestamp when runtime responded on ping.
 	// Mutex is used to protect this value.
-	runtimeState *runtimeState
+	runtimeState *runtimeState //见kubelet_network.go,在没有配置network plugin,由其记录cidr等
 
 	// Volume plugins.
 	volumePluginMgr *volume.VolumePluginMgr
@@ -985,6 +986,7 @@ type Kubelet struct {
 	nodeRef *v1.ObjectReference
 
 	// Container runtime.
+	// 根据底层容器管理器的不同,分别为cri,rkt,docker,所有实际的操作都是由底层管理器实现
 	containerRuntime kubecontainer.Runtime
 
 	// reasonCache caches the failure reason of the last creation of all containers, which is
@@ -1002,7 +1004,7 @@ type Kubelet struct {
 	// 2. nodeStatusUpdateFrequency needs to be large enough for kubelet to generate node
 	//    status. Kubelet may fail to update node status reliably if the value is too small,
 	//    as it takes time to gather all necessary node information.
-	nodeStatusUpdateFrequency time.Duration
+	nodeStatusUpdateFrequency time.Duration // kubelet的启动参数--node-status-update-frequency设置
 
 	// Generates pod events.
 	pleg pleg.PodLifecycleEventGenerator
@@ -1060,13 +1062,13 @@ type Kubelet struct {
 
 	// Optionally shape the bandwidth of a pod
 	// TODO: remove when kubenet plugin is ready
-	shaper bandwidth.BandwidthShaper
+	shaper bandwidth.BandwidthShaper //网络带宽整型器?
 
 	// True if container cpu limits should be enforced via cgroup CFS quota
 	cpuCFSQuota bool
 
 	// Information about the ports which are opened by daemons on Node running this Kubelet server.
-	daemonEndpoints *v1.NodeDaemonEndpoints
+	daemonEndpoints *v1.NodeDaemonEndpoints //kubelet监听的端口,默认是10250,由kubelet的启动参数--port来控制
 
 	// A queue used to trigger pod workers.
 	workQueue queue.WorkQueue
@@ -1075,7 +1077,7 @@ type Kubelet struct {
 	oneTimeInitializer sync.Once
 
 	// If non-nil, use this IP address for the node
-	nodeIP net.IP
+	nodeIP net.IP //节点ip地址
 
 	// clock is an interface that provides time related functionality in a way that makes it
 	// easy to test the code.
@@ -1103,23 +1105,23 @@ type Kubelet struct {
 	babysitDaemons bool
 
 	// handlers called during the tryUpdateNodeStatus cycle
-	setNodeStatusFuncs []func(*v1.Node) error
+	setNodeStatusFuncs []func(*v1.Node) error //一系列更新节点状态的控制器.默认为kubelet_node_status.go中kubelet.defaultNodeStatusFuncs()返回的一系列控制器.
 
 	// TODO: think about moving this to be centralized in PodWorkers in follow-on.
 	// the list of handlers to call during pod admission.
-	admitHandlers lifecycle.PodAdmitHandlers
+	admitHandlers lifecycle.PodAdmitHandlers //用来决定一个pod是否允许进入
 
 	// softAdmithandlers are applied to the pod after it is admitted by the Kubelet, but before it is
 	// run. A pod rejected by a softAdmitHandler will be left in a Pending state indefinitely. If a
 	// rejected pod should not be recreated, or the scheduler is not aware of the rejection rule, the
 	// admission rule should be applied by a softAdmitHandler.
-	softAdmitHandlers lifecycle.PodAdmitHandlers
+	softAdmitHandlers lifecycle.PodAdmitHandlers //用于决定是否一个pod是否允许运行
 
 	// the list of handlers to call during pod sync loop.
-	lifecycle.PodSyncLoopHandlers
+	lifecycle.PodSyncLoopHandlers //
 
 	// the list of handlers to call during pod sync.
-	lifecycle.PodSyncHandlers
+	lifecycle.PodSyncHandlers //用于决定是否驱逐一个pod
 
 	// the number of allowed pods per core
 	podsPerCore int
@@ -1127,7 +1129,7 @@ type Kubelet struct {
 	// enableControllerAttachDetach indicates the Attach/Detach controller
 	// should manage attachment/detachment of volumes scheduled to this node,
 	// and disable kubelet from executing any attach/detach operations
-	enableControllerAttachDetach bool
+	enableControllerAttachDetach bool //??卷的关联解关联器?
 
 	// trigger deleting containers in a pod
 	containerDeletor *podContainerDeletor
@@ -1296,6 +1298,7 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 
 	if kl.kubeClient != nil {
 		// Start syncing node status immediately, this may set up things the runtime needs to run.
+		//每个指定时间注册kubelet到apiserver并更新节点状态
 		go wait.Until(kl.syncNodeStatus, kl.nodeStatusUpdateFrequency, wait.NeverStop)
 	}
 	go wait.Until(kl.syncNetworkStatus, 30*time.Second, wait.NeverStop)
@@ -1586,6 +1589,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	}
 
 	// Fetch the pull secrets for the pod
+	//获取指定pod中镜像拉取secret
 	pullSecrets, err := kl.getPullSecretsForPod(pod)
 	if err != nil {
 		glog.Errorf("Unable to get pull secrets for pod %q: %v", format.Pod(pod), err)
@@ -1688,8 +1692,10 @@ func (kl *Kubelet) deletePod(pod *v1.Pod) error {
 }
 
 // isOutOfDisk detects if pods can't fit due to lack of disk space.
+//检测Kubelet的剩余空间是否满足设定的策略阈值
 func (kl *Kubelet) isOutOfDisk() bool {
 	// Check disk space once globally and reject or accept all new pods.
+	//检测docker镜像所在文件系统可用空间是否低于指定的策略阈值
 	withinBounds, err := kl.diskSpaceManager.IsRuntimeDiskSpaceAvailable()
 	// Assume enough space in case of errors.
 	if err != nil {
@@ -1698,6 +1704,7 @@ func (kl *Kubelet) isOutOfDisk() bool {
 		return true
 	}
 
+	//检测根文件系统可用空间是否低于指定的策略阈值
 	withinBounds, err = kl.diskSpaceManager.IsRootDiskSpaceAvailable()
 	// Assume enough space in case of errors.
 	if err != nil {
@@ -1728,7 +1735,9 @@ func (kl *Kubelet) canAdmitPod(pods []*v1.Pod, pod *v1.Pod) (bool, string, strin
 	// if any handler rejects, the pod is rejected.
 	// TODO: move out of disk check into a pod admitter
 	// TODO: out of resource eviction should have a pod admitter call-out
+	//遍历kubelet所有的admitHandlers,决议一个pod是否允许进入,不允许则返回原因
 	attrs := &lifecycle.PodAdmitAttributes{Pod: pod, OtherPods: pods}
+	// 遍历所有的podAdmitHandler,决议是否允许指定的Pod进入
 	for _, podAdmitHandler := range kl.admitHandlers {
 		if result := podAdmitHandler.Admit(attrs); !result.Admit {
 			return false, result.Reason, result.Message
@@ -1736,6 +1745,7 @@ func (kl *Kubelet) canAdmitPod(pods []*v1.Pod, pod *v1.Pod) (bool, string, strin
 	}
 	// TODO: When disk space scheduling is implemented (#11976), remove the out-of-disk check here and
 	// add the disk space predicate to predicates.GeneralPredicates.
+	//检测kubelet是否处于disk资源低于阈值
 	if kl.isOutOfDisk() {
 		glog.Warningf("Failed to admit pod %v - %s", format.Pod(pod), "predicate fails due to OutOfDisk")
 		return false, "OutOfDisk", "cannot be started due to lack of disk space."

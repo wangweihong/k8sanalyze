@@ -26,8 +26,9 @@ var (
 	defaultCachePeriod = time.Second * 2
 )
 
+//kubelet通过该接口GetPods获取运行中的Pod,参见kubelet_getter.go中的函数
 type RuntimeCache interface {
-	GetPods() ([]*Pod, error)
+	GetPods() ([]*Pod, error) ///这里pod的信息都是通过kubelet.containerRuntime接口来向底层容器管理器获取
 	ForceUpdateIfOlder(time.Time) error
 }
 
@@ -36,6 +37,7 @@ type podsGetter interface {
 }
 
 // NewRuntimeCache creates a container runtime cache.
+//getter为containerRuntime
 func NewRuntimeCache(getter podsGetter) (RuntimeCache, error) {
 	return &runtimeCache{
 		getter: getter,

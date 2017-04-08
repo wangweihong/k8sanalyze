@@ -38,6 +38,8 @@ type diskSpaceManager interface {
 	IsRuntimeDiskSpaceAvailable() (bool, error)
 }
 
+//这两个阈值都是通过kubelet的--low-diskspace-threshold-mb参数进行配置
+//策略阈值
 type DiskSpacePolicy struct {
 	// free disk space threshold for filesystem holding docker images.
 	DockerFreeDiskMB int //存储镜像的文件系统的剩余空间阈值
@@ -83,14 +85,17 @@ func (dm *realDiskSpaceManager) getFsInfo(fsType string, f func() (cadvisorapi.F
 	return fsi, nil
 }
 
+//检测runtime fs的文件系统剩余容量是否低于设定的策略值
 func (dm *realDiskSpaceManager) IsRuntimeDiskSpaceAvailable() (bool, error) {
 	return dm.isSpaceAvailable("runtime", dm.policy.DockerFreeDiskMB, dm.cadvisor.ImagesFsInfo)
 }
 
+//检测根文件系统剩余容量是否低于预订的策略值
 func (dm *realDiskSpaceManager) IsRootDiskSpaceAvailable() (bool, error) {
 	return dm.isSpaceAvailable("root", dm.policy.RootFreeDiskMB, dm.cadvisor.RootFsInfo)
 }
 
+//判断指定文件系统的可用容量是否低于指定阈值
 func (dm *realDiskSpaceManager) isSpaceAvailable(fsType string, threshold int, f func() (cadvisorapi.FsInfo, error)) (bool, error) {
 	fsInfo, err := dm.getFsInfo(fsType, f)
 	if err != nil {

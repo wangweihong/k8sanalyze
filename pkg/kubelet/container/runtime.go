@@ -58,6 +58,7 @@ type ImageStats struct {
 // Runtime interface defines the interfaces that should be implemented
 // by a container runtime.
 // Thread safety is required from implementations of this interface.
+//所有真正获取资源信息的接口
 type Runtime interface {
 	// Type returns the type of the container runtime.
 	Type() string
@@ -171,7 +172,7 @@ type ContainerCommandRunner interface {
 }
 
 // Pod is a group of containers.
-//这里是kubelet对pod的描述?
+//这里是kubelet对pod的描述?对,kubelet_getter.go中的GetRunningPods()有将Pod转换成api pod的例子
 type Pod struct {
 	// The ID of the pod, which can be used to retrieve a particular pod
 	// from the pod list returned by GetPods().
@@ -575,6 +576,7 @@ func (p *Pod) FindSandboxByID(id ContainerID) *Container {
 
 // ToAPIPod converts Pod to v1.Pod. Note that if a field in v1.Pod has no
 // corresponding field in Pod, the field would not be populated.
+//将kubelet pod转换成api pod
 func (p *Pod) ToAPIPod() *v1.Pod {
 	var pod v1.Pod
 	pod.UID = p.ID

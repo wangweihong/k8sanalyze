@@ -27,6 +27,7 @@ import (
 // FromServices builds environment variables that a container is started with,
 // which tell the container where to find the services it may need, which are
 // provided as an argument.
+//将传入的服务转换成相应的环境变量
 func FromServices(services []*v1.Service) []v1.EnvVar {
 	var result []v1.EnvVar
 	//遍历所有的服务

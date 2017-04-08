@@ -59,7 +59,9 @@ import (
 )
 
 // Get a list of pods that have data directories.
+//从数据存储目录中获取所有pod的uid列表
 func (kl *Kubelet) listPodsFromDisk() ([]types.UID, error) {
+	//获取kubelet pod数据存放目录信息
 	podInfos, err := ioutil.ReadDir(kl.getPodsDir())
 	if err != nil {
 		return nil, err
@@ -109,6 +111,7 @@ func makeMounts(pod *v1.Pod, podDir string, container *v1.Container, hostName, h
 	mountEtcHostsFile := (pod.Spec.SecurityContext == nil || !pod.Spec.HostNetwork) && len(podIP) > 0 && runtime.GOOS != "windows"
 	glog.V(3).Infof("container: %v/%v/%v podIP: %q creating hosts mount: %v", pod.Namespace, pod.Name, container.Name, podIP, mountEtcHostsFile)
 	mounts := []kubecontainer.Mount{}
+	//遍历容器所有的卷挂载点
 	for _, mount := range container.VolumeMounts {
 		mountEtcHostsFile = mountEtcHostsFile && (mount.MountPath != etcHostsPath)
 		vol, ok := podVolumes[mount.Name]
@@ -295,6 +298,7 @@ func (kl *Kubelet) GeneratePodHostNameAndDomain(pod *v1.Pod) (string, string, er
 // the container runtime to set parameters for launching a container.
 func (kl *Kubelet) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Container, podIP string) (*kubecontainer.RunContainerOptions, error) {
 	var err error
+	//创建一个Pod容器管理器
 	pcm := kl.containerManager.NewPodContainerManager()
 	_, podContainerName := pcm.GetPodContainerName(pod)
 	opts := &kubecontainer.RunContainerOptions{CgroupParent: podContainerName}
@@ -309,6 +313,7 @@ func (kl *Kubelet) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Contai
 	opts.PortMappings = makePortMappings(container)
 	opts.Devices = makeDevices(container)
 
+	//
 	opts.Mounts, err = makeMounts(pod, kl.getPodDir(pod.UID), container, hostname, hostDomainName, podIP, volumes)
 	if err != nil {
 		return nil, err
@@ -346,6 +351,7 @@ var masterServices = sets.NewString("kubernetes")
 
 // getServiceEnvVarMap makes a map[string]string of env vars for services a
 // pod in namespace ns should see.
+//获取ns命名空间的服务以及masterserviceNamesapce中的kuberntes服务,转换成环境变量
 func (kl *Kubelet) getServiceEnvVarMap(ns string) (map[string]string, error) {
 	var (
 		serviceMap = make(map[string]*v1.Service)
@@ -358,6 +364,7 @@ func (kl *Kubelet) getServiceEnvVarMap(ns string) (map[string]string, error) {
 		// Kubelets without masters (e.g. plain GCE ContainerVM) don't set env vars.
 		return m, nil
 	}
+	//向apiserver获取所有的服务
 	services, err := kl.serviceLister.List(labels.Everything())
 	if err != nil {
 		return m, fmt.Errorf("failed to list services when setting up env vars.")
@@ -377,8 +384,10 @@ func (kl *Kubelet) getServiceEnvVarMap(ns string) (map[string]string, error) {
 		// is in, the pod should receive all the services in the namespace.
 		//
 		// ordering of the case clauses below enforces this
+		//如果是指定的ns
 		case ns:
 			serviceMap[serviceName] = service
+			//如果是Kubelet主服务命名空间
 		case kl.masterServiceNamespace:
 			if masterServices.Has(serviceName) {
 				if _, exists := serviceMap[serviceName]; !exists {
@@ -411,6 +420,7 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container
 	// To avoid this users can: (1) wait between starting a service and starting; or (2) detect
 	// missing service env var and exit and be restarted; or (3) use DNS instead of env vars
 	// and keep trying to resolve the DNS name of the service (recommended).
+	//获取pod所在命名空间的服务,并转换成相应的环境变量
 	serviceEnv, err := kl.getServiceEnvVarMap(pod.Namespace)
 	if err != nil {
 		return result, err
@@ -423,7 +433,9 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container
 
 	// Env will override EnvFrom variables.
 	// Process EnvFrom first then allow Env to replace existing values.
+	//来自于configmap中的环境变量
 	for _, envFrom := range container.EnvFrom {
+		//使用configmap中的环境变量
 		if envFrom.ConfigMapRef != nil {
 			name := envFrom.ConfigMapRef.Name
 			configMap, ok := configMaps[name]
@@ -431,6 +443,7 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container
 				if kl.kubeClient == nil {
 					return result, fmt.Errorf("Couldn't get configMap %v/%v, no kubeClient defined", pod.Namespace, name)
 				}
+				//获取指定的configmap
 				configMap, err = kl.kubeClient.Core().ConfigMaps(pod.Namespace).Get(name, metav1.GetOptions{})
 
 				if err != nil {
@@ -438,10 +451,12 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container
 				}
 				configMaps[name] = configMap
 			}
+			//遍历configmap中的配置项
 			for k, v := range configMap.Data {
 				if len(envFrom.Prefix) > 0 {
 					k = envFrom.Prefix + k
 				}
+				//???? 检查键值是否合法?
 				if errMsgs := utilvalidation.IsCIdentifier(k); len(errMsgs) != 0 {
 					return result, fmt.Errorf("Invalid environment variable name, %v, from configmap %v/%v: %s", k, pod.Namespace, name, errMsgs[0])
 				}
@@ -469,6 +484,7 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container
 		secrets     = make(map[string]*v1.Secret)
 		mappingFunc = expansion.MappingFuncFor(tmpEnv, serviceEnv)
 	)
+	//遍历容器所有环境变量
 	for _, envVar := range container.Env {
 		// Accesses apiserver+Pods.
 		// So, the master may set service env vars, or kubelet may.  In case both are doing
@@ -556,6 +572,7 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container
 // podFieldSelectorRuntimeValue returns the runtime value of the given
 // selector for a pod.
 func (kl *Kubelet) podFieldSelectorRuntimeValue(fs *v1.ObjectFieldSelector, pod *v1.Pod, podIP string) (string, error) {
+	//??
 	internalFieldPath, _, err := api.Scheme.ConvertFieldLabel(fs.APIVersion, "Pod", fs.FieldPath, "")
 	if err != nil {
 		return "", err
@@ -622,6 +639,7 @@ func (kl *Kubelet) killPod(pod *v1.Pod, runningPod *kubecontainer.Pod, status *k
 }
 
 // makePodDataDirs creates the dirs for the pod datas.
+//创建pod存放数据的目录
 func (kl *Kubelet) makePodDataDirs(pod *v1.Pod) error {
 	uid := pod.UID
 	if err := os.MkdirAll(kl.getPodDir(uid), 0750); err != nil && !os.IsExist(err) {
@@ -641,6 +659,7 @@ func (kl *Kubelet) makePodDataDirs(pod *v1.Pod) error {
 // TODO: duplicate secrets are being retrieved multiple times and there
 // is no cache.  Creating and using a secret manager interface will make this
 // easier to address.
+//获取pod中所使用的镜像拉取secret
 func (kl *Kubelet) getPullSecretsForPod(pod *v1.Pod) ([]v1.Secret, error) {
 	pullSecrets := []v1.Secret{}
 

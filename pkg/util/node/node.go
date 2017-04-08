@@ -77,6 +77,7 @@ func GetPreferredNodeAddress(node *v1.Node, preferredAddressTypes []v1.NodeAddre
 // 1. NodeInternalIP
 // 2. NodeExternalIP
 // 3. NodeLegacyHostIP
+//从api node中获取ip地址,返回最高优先级类型的IP
 func GetNodeHostIP(node *v1.Node) (net.IP, error) {
 	addresses := node.Status.Addresses
 	addressMap := make(map[v1.NodeAddressType][]v1.NodeAddress)
@@ -157,6 +158,7 @@ func SetNodeCondition(c clientset.Interface, node types.NodeName, condition v1.N
 }
 
 // PatchNodeStatus patches node status.
+//利用patch接口更新了node的信息
 func PatchNodeStatus(c clientset.Interface, nodeName types.NodeName, oldNode *v1.Node, newNode *v1.Node) (*v1.Node, error) {
 	oldData, err := json.Marshal(oldNode)
 	if err != nil {

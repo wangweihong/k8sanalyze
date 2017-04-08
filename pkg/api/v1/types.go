@@ -1553,9 +1553,9 @@ type ConditionStatus string
 // can't decide if a resource is in the condition or not. In the future, we could add other
 // intermediate conditions, e.g. ConditionDegraded.
 const (
-	ConditionTrue    ConditionStatus = "True"
-	ConditionFalse   ConditionStatus = "False"
-	ConditionUnknown ConditionStatus = "Unknown"
+	ConditionTrue    ConditionStatus = "True"    //资源状况好?
+	ConditionFalse   ConditionStatus = "False"   //资源状况坏?
+	ConditionUnknown ConditionStatus = "Unknown" //资源处于未知状态?
 )
 
 // ContainerStateWaiting is a waiting state of a container.
@@ -1615,6 +1615,7 @@ type ContainerState struct {
 }
 
 // ContainerStatus contains details for the current status of this container.
+//描述容器的当前状态
 type ContainerStatus struct {
 	// This must be a DNS_LABEL. Each container in a pod must have a unique name.
 	// Cannot be updated.
@@ -1685,6 +1686,7 @@ const (
 )
 
 // PodCondition contains details for the current condition of this pod.
+//描述Pod的状态?
 type PodCondition struct {
 	// Type is the type of the condition.
 	// Currently only Ready.
@@ -2208,6 +2210,7 @@ type PodStatus struct {
 	// Current service state of pod.
 	// More info: http://kubernetes.io/docs/user-guide/pod-states#pod-conditions
 	// +optional
+	//??? pod的当前状态?
 	Conditions []PodCondition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,2,rep,name=conditions"`
 	// A human readable message indicating details about why the pod is in this condition.
 	// +optional
@@ -2929,6 +2932,7 @@ type NodeStatus struct {
 	// Allocatable represents the resources of a node that are available for scheduling.
 	// Defaults to Capacity.
 	// +optional
+	//这是系统上所有的资源
 	Allocatable ResourceList `json:"allocatable,omitempty" protobuf:"bytes,2,rep,name=allocatable,casttype=ResourceList,castkey=ResourceName"`
 	// NodePhase is the recently observed lifecycle phase of the node.
 	// More info: http://releases.k8s.io/HEAD/docs/admin/node.md#node-phase

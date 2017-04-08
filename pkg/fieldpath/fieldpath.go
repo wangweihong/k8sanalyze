@@ -175,8 +175,10 @@ func convertResourceMemoryToString(memory *resource.Quantity, divisor resource.Q
 
 // MergeContainerResourceLimits checks if a limit is applied for
 // the container, and if not, it sets the limit to the passed resource list.
+//如果容器没有设置资源limit,默认为allocatable上的资源上限
 func MergeContainerResourceLimits(container *v1.Container,
 	allocatable v1.ResourceList) {
+	//如果容器配有指定资源limit
 	if container.Resources.Limits == nil {
 		container.Resources.Limits = make(v1.ResourceList)
 	}

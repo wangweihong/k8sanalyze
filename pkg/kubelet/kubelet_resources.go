@@ -31,15 +31,18 @@ import (
 // the node allocatable.
 // TODO: if/when we have pod level resources, we need to update this function
 // to use those limits instead of node allocatable.
+//拷贝传入的pod和容器,将拷贝的pod和容器中所有没有设置limit的resource设置上限为kubelet的相应可分配资源上限
 func (kl *Kubelet) defaultPodLimitsForDownwardApi(pod *v1.Pod, container *v1.Container) (*v1.Pod, *v1.Container, error) {
 	if pod == nil {
 		return nil, nil, fmt.Errorf("invalid input, pod cannot be nil")
 	}
 
+	//获取kublet的api node对象,
 	node, err := kl.getNodeAnyWay()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to find node object, expected a node")
 	}
+	//获取节点的资源列表
 	allocatable := node.Status.Allocatable
 
 	podCopy, err := api.Scheme.Copy(pod)
@@ -50,6 +53,7 @@ func (kl *Kubelet) defaultPodLimitsForDownwardApi(pod *v1.Pod, container *v1.Con
 	if !ok {
 		return nil, nil, fmt.Errorf("unexpected type returned from deep copy of pod object")
 	}
+	//遍历所有的容器,如果容器没有设置资源上限,则默认为节点上的可分配资源上限
 	for idx := range outputPod.Spec.Containers {
 		fieldpath.MergeContainerResourceLimits(&outputPod.Spec.Containers[idx], allocatable)
 	}
@@ -66,5 +70,6 @@ func (kl *Kubelet) defaultPodLimitsForDownwardApi(pod *v1.Pod, container *v1.Con
 		}
 		fieldpath.MergeContainerResourceLimits(outputContainer, allocatable)
 	}
+
 	return outputPod, outputContainer, nil
 }

@@ -236,7 +236,7 @@ type KubeletConfiguration struct {
 	ClusterDomain string
 	// masterServiceNamespace is The namespace from which the kubernetes
 	// master services should be injected into pods.
-	MasterServiceNamespace string
+	MasterServiceNamespace string //??kubernet应该注入到Pod中的主服务?
 	// clusterDNS is the IP address for a cluster DNS server.  If set, kubelet
 	// will configure all containers to use this for DNS resolution in
 	// addition to the host's DNS servers

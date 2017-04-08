@@ -56,7 +56,7 @@ const (
 // to call multiple times, but not concurrently (kl.registrationCompleted is
 // not locked).
 func (kl *Kubelet) registerWithApiServer() {
-	if kl.registrationCompleted {
+	if kl.registrationCompleted { //kubelet是否已经向apiserver登记
 		return
 	}
 	step := 100 * time.Millisecond
@@ -68,6 +68,7 @@ func (kl *Kubelet) registerWithApiServer() {
 			step = 7 * time.Second
 		}
 
+		//通过kubelet对象的内容生成api node对象
 		node, err := kl.initialNode()
 		if err != nil {
 			glog.Errorf("Unable to construct v1.Node object for kubelet: %v", err)
@@ -92,16 +93,19 @@ func (kl *Kubelet) registerWithApiServer() {
 // a different externalID value, it attempts to delete that node so that a
 // later attempt can recreate it.
 func (kl *Kubelet) tryRegisterWithApiServer(node *v1.Node) bool {
+	//通过Kubeclient向apiserver创建节点
 	_, err := kl.kubeClient.Core().Nodes().Create(node)
 	if err == nil {
 		return true
 	}
 
+	//如果节点已经在apiserver中存在了
 	if !apierrors.IsAlreadyExists(err) {
 		glog.Errorf("Unable to register node %q with API server: %v", kl.nodeName, err)
 		return false
 	}
 
+	//获取已经存在节点的细心你
 	existingNode, err := kl.kubeClient.Core().Nodes().Get(string(kl.nodeName), metav1.GetOptions{})
 	if err != nil {
 		glog.Errorf("Unable to register node %q with API server: error getting existing node: %v", kl.nodeName, err)
@@ -130,8 +134,10 @@ func (kl *Kubelet) tryRegisterWithApiServer(node *v1.Node) bool {
 		// Edge case: the node was previously registered; reconcile
 		// the value of the controller-managed attach-detach
 		// annotation.
+		//检测已存在的节点是否需要更新
 		requiresUpdate := kl.reconcileCMADAnnotationWithExistingNode(node, existingNode)
 		if requiresUpdate {
+			//利用kubectl的patch接口更新了node的信息
 			if _, err := nodeutil.PatchNodeStatus(kl.kubeClient, types.NodeName(kl.nodeName),
 				originalNode, existingNode); err != nil {
 				glog.Errorf("Unable to reconcile node %q with API server: error updating node: %v", kl.nodeName, err)
@@ -146,6 +152,7 @@ func (kl *Kubelet) tryRegisterWithApiServer(node *v1.Node) bool {
 		"Previously node %q had externalID %q; now it is %q; will delete and recreate.",
 		kl.nodeName, node.Spec.ExternalID, existingNode.Spec.ExternalID,
 	)
+	//如果是老的节点,则删除
 	if err := kl.kubeClient.Core().Nodes().Delete(node.Name, nil); err != nil {
 		glog.Errorf("Unable to register node %q with API server: error deleting old node: %v", kl.nodeName, err)
 	} else {
@@ -158,12 +165,15 @@ func (kl *Kubelet) tryRegisterWithApiServer(node *v1.Node) bool {
 // reconcileCMADAnnotationWithExistingNode reconciles the controller-managed
 // attach-detach annotation on a new node and the existing node, returning
 // whether the existing node must be updated.
+//根据已存在的api node和新的api node中annotation "volumes.kubernetes.io/controller-managed-attach-detach"的比较
+//来决定是否需要更新已存在的node
 func (kl *Kubelet) reconcileCMADAnnotationWithExistingNode(node, existingNode *v1.Node) bool {
 	var (
 		existingCMAAnnotation    = existingNode.Annotations[volumehelper.ControllerManagedAttachAnnotation]
 		newCMAAnnotation, newSet = node.Annotations[volumehelper.ControllerManagedAttachAnnotation]
 	)
 
+	//如果两个节点中的annotation: "volumes.kubernetes.io/controller-managed-attach-detach"相同,则返回false
 	if newCMAAnnotation == existingCMAAnnotation {
 		return false
 	}
@@ -171,14 +181,18 @@ func (kl *Kubelet) reconcileCMADAnnotationWithExistingNode(node, existingNode *v
 	// If the just-constructed node and the existing node do
 	// not have the same value, update the existing node with
 	// the correct value of the annotation.
+	//如果新节点不存在annotation volumes.kubernetes.io/controller-managed-attach-detach
 	if !newSet {
 		glog.Info("Controller attach-detach setting changed to false; updating existing Node")
+		//删除已存在node的相关annotations
 		delete(existingNode.Annotations, volumehelper.ControllerManagedAttachAnnotation)
 	} else {
 		glog.Info("Controller attach-detach setting changed to true; updating existing Node")
+		//如果已存在的节点的annotion为空
 		if existingNode.Annotations == nil {
 			existingNode.Annotations = make(map[string]string)
 		}
+		//加上新api node的volumes.kubernetes.io/controller-managed-attach-detach
 		existingNode.Annotations[volumehelper.ControllerManagedAttachAnnotation] = newCMAAnnotation
 	}
 
@@ -187,13 +201,14 @@ func (kl *Kubelet) reconcileCMADAnnotationWithExistingNode(node, existingNode *v
 
 // initialNode constructs the initial v1.Node for this Kubelet, incorporating node
 // labels, information from the cloud provider, and Kubelet configuration.
+//kubelet根据自身情况生成api node信息
 func (kl *Kubelet) initialNode() (*v1.Node, error) {
 	node := &v1.Node{
 		ObjectMeta: v1.ObjectMeta{
 			Name: string(kl.nodeName),
 			Labels: map[string]string{
 				metav1.LabelHostname:       kl.hostname,
-				metav1.LabelOS:             goruntime.GOOS,
+				metav1.LabelOS:             goruntime.GOOS, //利用goroutine获取系统
 				metav1.LabelArch:           goruntime.GOARCH,
 				metav1.LabelFluentdDsReady: "true",
 			},
@@ -208,11 +223,13 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 		if err != nil {
 			return nil, err
 		}
+		// annotations "scheduler.alpha.kubernetes.io/taints"
 		annotations[v1.TaintsAnnotationKey] = string(b)
 		node.ObjectMeta.Annotations = annotations
 
 	}
 	// Initially, set NodeNetworkUnavailable to true.
+	//添加节点状态
 	if kl.providerRequiresNetworkingConfiguration() {
 		node.Status.Conditions = append(node.Status.Conditions, v1.NodeCondition{
 			Type:               v1.NodeNetworkUnavailable,
@@ -223,6 +240,7 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 		})
 	}
 
+	//和卷有关?
 	if kl.enableControllerAttachDetach {
 		if node.Annotations == nil {
 			node.Annotations = make(map[string]string)
@@ -242,6 +260,7 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 		node.ObjectMeta.Labels[k] = v
 	}
 
+	//和外部云有关
 	if kl.cloud != nil {
 		instances, ok := kl.cloud.Instances()
 		if !ok {
@@ -311,9 +330,10 @@ func (kl *Kubelet) syncNodeStatus() {
 	if kl.kubeClient == nil {
 		return
 	}
+	//是否自动注册node到apiserver
 	if kl.registerNode {
 		// This will exit immediately if it doesn't need to do anything.
-		kl.registerWithApiServer()
+		kl.registerWithApiServer() //尝试注册节点到api server
 	}
 	if err := kl.updateNodeStatus(); err != nil {
 		glog.Errorf("Unable to update node status: %v", err)
@@ -322,6 +342,7 @@ func (kl *Kubelet) syncNodeStatus() {
 
 // updateNodeStatus updates node status to master with retries.
 func (kl *Kubelet) updateNodeStatus() error {
+	//尝试5次,更新节点的状态
 	for i := 0; i < nodeStatusUpdateRetry; i++ {
 		if err := kl.tryUpdateNodeStatus(i); err != nil {
 			glog.Errorf("Error updating node status, will retry: %v", err)
@@ -334,6 +355,7 @@ func (kl *Kubelet) updateNodeStatus() error {
 
 // tryUpdateNodeStatus tries to update node status to master. If ReconcileCBR0
 // is set, this function will also confirm that cbr0 is configured correctly.
+//尝试去更新节点的状态
 func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 	// In large clusters, GET and PUT operations on Node objects coming
 	// from here are the majority of load on apiserver and etcd.
@@ -345,6 +367,7 @@ func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 	if tryNumber == 0 {
 		opts.ResourceVersion = "0"
 	}
+	//获取节点的状态
 	node, err := kl.kubeClient.Core().Nodes().Get(string(kl.nodeName), opts)
 	if err != nil {
 		return fmt.Errorf("error getting node %q: %v", kl.nodeName, err)
@@ -360,8 +383,10 @@ func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 		return fmt.Errorf("failed to cast %q node object %#v to v1.Node", kl.nodeName, clonedNode)
 	}
 
+	//更新节点的cidr
 	kl.updatePodCIDR(node.Spec.PodCIDR)
 
+	//更新api node中的状态信息
 	kl.setNodeStatus(node)
 	// Patch the current status on the API server
 	updatedNode, err := nodeutil.PatchNodeStatus(kl.kubeClient, types.NodeName(kl.nodeName), originalNode, node)
@@ -562,6 +587,7 @@ func (kl *Kubelet) setNodeStatusVersionInfo(node *v1.Node) {
 }
 
 // Set daemonEndpoints for the node.
+//设置api node的监听端口号为kubelet的监听端口号
 func (kl *Kubelet) setNodeStatusDaemonEndpoints(node *v1.Node) {
 	node.Status.DaemonEndpoints = *kl.daemonEndpoints
 }
@@ -887,6 +913,8 @@ func (kl *Kubelet) setNodeVolumesInUseStatus(node *v1.Node) {
 // any fields that are currently set.
 // TODO(madhusudancs): Simplify the logic for setting node conditions and
 // refactor the node status condition code out to a different file.
+//利用kubelet的节点更新控制器去更新节点状态
+//包括1)更新节点地址2)节点镜像信息,运行架构,监听端口号3)节点硬盘容量状况,内存压力状况,硬盘压力状况4)节点的准备状况5)节点的可调度 状态
 func (kl *Kubelet) setNodeStatus(node *v1.Node) {
 	for _, f := range kl.setNodeStatusFuncs {
 		if err := f(node); err != nil {
@@ -897,6 +925,7 @@ func (kl *Kubelet) setNodeStatus(node *v1.Node) {
 
 // defaultNodeStatusFuncs is a factory that generates the default set of
 // setNodeStatus funcs
+//默认的更新节点状态控制器集
 func (kl *Kubelet) defaultNodeStatusFuncs() []func(*v1.Node) error {
 	// initial set of node status update handlers, can be modified by Option's
 	withoutError := func(f func(*v1.Node)) func(*v1.Node) error {
@@ -918,6 +947,7 @@ func (kl *Kubelet) defaultNodeStatusFuncs() []func(*v1.Node) error {
 }
 
 // Validate given node IP belongs to the current host
+//检测当前节点的ip地址
 func (kl *Kubelet) validateNodeIP() error {
 	if kl.nodeIP == nil {
 		return nil

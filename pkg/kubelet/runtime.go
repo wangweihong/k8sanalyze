@@ -26,9 +26,9 @@ type runtimeState struct {
 	sync.RWMutex
 	lastBaseRuntimeSync      time.Time
 	baseRuntimeSyncThreshold time.Duration
-	networkError             error
+	networkError             error //
 	internalError            error
-	cidr                     string
+	cidr                     string //
 	initError                error
 }
 
