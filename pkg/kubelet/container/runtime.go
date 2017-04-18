@@ -213,6 +213,7 @@ func BuildContainerID(typ, ID string) ContainerID {
 }
 
 // Convenience method for creating a ContainerID from an ID string.
+//将容器ID字符串解析成容器ID类型
 func ParseContainerID(containerID string) ContainerID {
 	var id ContainerID
 	if err := id.ParseString(containerID); err != nil {
@@ -392,6 +393,7 @@ type Mount struct {
 	SELinuxRelabel bool
 }
 
+//端口映射? 由v1.Contaier.Port赋值
 type PortMapping struct {
 	// Name of the port mapping
 	Name string

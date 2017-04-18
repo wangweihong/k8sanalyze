@@ -79,6 +79,7 @@ func (kl *Kubelet) listPodsFromDisk() ([]types.UID, error) {
 //获取不处于终止状态的Pod(Pod.Status.Phase不为Successed或者Failed的Pod)
 func (kl *Kubelet) getActivePods() []*v1.Pod {
 	allPods := kl.podManager.GetPods()
+
 	activePods := kl.filterOutTerminatedPods(allPods)
 	return activePods
 }
@@ -183,6 +184,7 @@ func makeHostsMount(podDir, podIP, hostName, hostDomainName string) (*kubecontai
 
 // ensureHostsFile ensures that the given host file has an up-to-date ip, host
 // name, and domain name.
+//创建域名解析文件
 func ensureHostsFile(fileName, hostIP, hostName, hostDomainName string) error {
 	if _, err := os.Stat(fileName); os.IsExist(err) {
 		glog.V(4).Infof("kubernetes-managed etc-hosts file exits. Will not be recreated: %q", fileName)
@@ -204,9 +206,11 @@ func ensureHostsFile(fileName, hostIP, hostName, hostDomainName string) error {
 	return ioutil.WriteFile(fileName, buffer.Bytes(), 0644)
 }
 
+//创建端口映射?
 func makePortMappings(container *v1.Container) (ports []kubecontainer.PortMapping) {
 	names := make(map[string]struct{})
 	for _, p := range container.Ports {
+		//端口映射?
 		pm := kubecontainer.PortMapping{
 			HostPort:      int(p.HostPort),
 			ContainerPort: int(p.ContainerPort),
@@ -235,6 +239,7 @@ func makePortMappings(container *v1.Container) (ports []kubecontainer.PortMappin
 }
 
 // truncatePodHostnameIfNeeded truncates the pod hostname if it's longer than 63 chars.
+//裁剪主机名,主机名限定长度为63
 func truncatePodHostnameIfNeeded(podName, hostname string) (string, error) {
 	// Cap hostname at 63 chars (specification is 64bytes which is 63 chars and the null terminating char).
 	const hostnameMaxLen = 63
@@ -274,6 +279,7 @@ func (kl *Kubelet) GeneratePodHostNameAndDomain(pod *v1.Pod) (string, string, er
 			hostname = hostnameCandidate
 		}
 	}
+	//裁剪主机名
 	hostname, err := truncatePodHostnameIfNeeded(pod.Name, hostname)
 	if err != nil {
 		return "", "", err
@@ -409,6 +415,7 @@ func (kl *Kubelet) getServiceEnvVarMap(ns string) (map[string]string, error) {
 }
 
 // Make the environment variables for a pod in the given namespace.
+//将Pod相关的服务,引用的Configmap
 func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container, podIP string) ([]kubecontainer.EnvVar, error) {
 	var result []kubecontainer.EnvVar
 	// Note:  These are added to the docker Config, but are not included in the checksum computed
@@ -484,7 +491,7 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container
 		secrets     = make(map[string]*v1.Secret)
 		mappingFunc = expansion.MappingFuncFor(tmpEnv, serviceEnv)
 	)
-	//遍历容器所有环境变量
+	//遍历容器所有环境变量,先移除和服务相关的环境变量,
 	for _, envVar := range container.Env {
 		// Accesses apiserver+Pods.
 		// So, the master may set service env vars, or kubelet may.  In case both are doing
@@ -677,6 +684,7 @@ func (kl *Kubelet) getPullSecretsForPod(pod *v1.Pod) ([]v1.Secret, error) {
 }
 
 // Returns true if pod is in the terminated state ("Failed" or "Succeeded").
+//判断一个Pod是否处于激活状态
 func (kl *Kubelet) podIsTerminated(pod *v1.Pod) bool {
 	var status v1.PodStatus
 	// Check the cached pod status which was set after the last sync.
@@ -876,9 +884,11 @@ func hasHostPortConflicts(pods []*v1.Pod) bool {
 // of the container. The previous flag will only return the logs for the last terminated container, otherwise, the current
 // running container is preferred over a previous termination. If info about the container is not available then a specific
 // error is returned to the end user.
+//检测容器的状态,如果指定了previsous, 返回上一次终止时容器的ID, 如果处于运行或终止,返回容器ID,如果处于等待状态,返回等待原因的错误
 func (kl *Kubelet) validateContainerLogStatus(podName string, podStatus *v1.PodStatus, containerName string, previous bool) (containerID kubecontainer.ContainerID, err error) {
 	var cID string
 
+	//获取指定版本的容器的状态
 	cStatus, found := v1.GetContainerStatus(podStatus.ContainerStatuses, containerName)
 	// if not found, check the init containers
 	if !found {
@@ -887,25 +897,33 @@ func (kl *Kubelet) validateContainerLogStatus(podName string, podStatus *v1.PodS
 	if !found {
 		return kubecontainer.ContainerID{}, fmt.Errorf("container %q in pod %q is not available", containerName, podName)
 	}
+	//容器上一次终止状态
 	lastState := cStatus.LastTerminationState
+	//当前状态
 	waiting, running, terminated := cStatus.State.Waiting, cStatus.State.Running, cStatus.State.Terminated
 
 	switch {
+	//参数指定上一次状态终止
 	case previous:
+		//如果上一次没有终止状态
 		if lastState.Terminated == nil {
 			return kubecontainer.ContainerID{}, fmt.Errorf("previous terminated container %q in pod %q not found", containerName, podName)
 		}
+		//上一次终止时容器的ID
 		cID = lastState.Terminated.ContainerID
 
+		//如果处于运行状态
 	case running != nil:
 		cID = cStatus.ContainerID
 
+		//如果处于终止状态
 	case terminated != nil:
 		cID = terminated.ContainerID
 
 	case lastState.Terminated != nil:
 		cID = lastState.Terminated.ContainerID
 
+		//获取容器等待的原因
 	case waiting != nil:
 		// output some info for the most common pending failures
 		switch reason := waiting.Reason; reason {
@@ -921,21 +939,25 @@ func (kl *Kubelet) validateContainerLogStatus(podName string, podStatus *v1.PodS
 		return kubecontainer.ContainerID{}, fmt.Errorf("container %q in pod %q is waiting to start - no logs yet", containerName, podName)
 	}
 
+	//将容器ID字符串,转换成容器ID类型
 	return kubecontainer.ParseContainerID(cID), nil
 }
 
 // GetKubeletContainerLogs returns logs from the container
 // TODO: this method is returning logs of random container attempts, when it should be returning the most recent attempt
 // or all of them.
+//获取指定容器的日志,根据logOptions的选项,决定是否是显示上一次终止容器的日志
 func (kl *Kubelet) GetKubeletContainerLogs(podFullName, containerName string, logOptions *v1.PodLogOptions, stdout, stderr io.Writer) error {
 	// Pod workers periodically write status to statusManager. If status is not
 	// cached there, something is wrong (or kubelet just restarted and hasn't
 	// caught up yet). Just assume the pod is not ready yet.
+	//解析<namespace>_<name>得到pod名和命名空间
 	name, namespace, err := kubecontainer.ParsePodFullName(podFullName)
 	if err != nil {
 		return fmt.Errorf("unable to parse pod full name %q: %v", podFullName, err)
 	}
 
+	//获得指定的Pod
 	pod, ok := kl.GetPodByName(namespace, name)
 	if !ok {
 		return fmt.Errorf("pod %q cannot be found - no logs available", name)
@@ -945,6 +967,7 @@ func (kl *Kubelet) GetKubeletContainerLogs(podFullName, containerName string, lo
 	if mirrorPod, ok := kl.podManager.GetMirrorPodByPod(pod); ok {
 		podUID = mirrorPod.UID
 	}
+	//获取Pod的状态
 	podStatus, found := kl.statusManager.GetPodStatus(podUID)
 	if !found {
 		// If there is no cached status, use the status from the
@@ -957,6 +980,7 @@ func (kl *Kubelet) GetKubeletContainerLogs(podFullName, containerName string, lo
 	// but inside kuberuntime we convert container id back to container name and restart count.
 	// TODO: After separate container log lifecycle management, we should get log based on the existing log files
 	// instead of container status.
+	//根据容器当前的状态,返回容器的ID,
 	containerID, err := kl.validateContainerLogStatus(pod.Name, &podStatus, containerName, logOptions.Previous)
 	if err != nil {
 		return err
@@ -969,6 +993,7 @@ func (kl *Kubelet) GetKubeletContainerLogs(podFullName, containerName string, lo
 		return err
 	}
 
+	//获取容器的日志
 	return kl.containerRuntime.GetContainerLogs(pod, containerID, logOptions, stdout, stderr)
 }
 
@@ -979,9 +1004,11 @@ func GetPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 	initialized := 0
 	pendingInitialization := 0
 	failedInitialization := 0
+	//遍历初始容器,统计初始容器的状态
 	for _, container := range spec.InitContainers {
 		containerStatus, ok := v1.GetContainerStatus(info, container.Name)
 		if !ok {
+			//统计正在初始化的初始容器
 			pendingInitialization++
 			continue
 		}
@@ -1016,6 +1043,7 @@ func GetPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 	stopped := 0
 	failed := 0
 	succeeded := 0
+	//遍历所有容器,统计各状态容器的数量
 	for _, container := range spec.Containers {
 		containerStatus, ok := v1.GetContainerStatus(info, container.Name)
 		if !ok {
@@ -1044,6 +1072,7 @@ func GetPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 		}
 	}
 
+	//如果存在初始化失败的初始容器,而重启策略为不重启,则返回PodFailed
 	if failedInitialization > 0 && spec.RestartPolicy == v1.RestartPolicyNever {
 		return v1.PodFailed
 	}

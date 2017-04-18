@@ -1622,9 +1622,11 @@ type ContainerStatus struct {
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// Details about the container's current condition.
 	// +optional
+	//当前容器状态
 	State ContainerState `json:"state,omitempty" protobuf:"bytes,2,opt,name=state"`
 	// Details about the container's last termination condition.
 	// +optional
+	//上一次终止状态
 	LastTerminationState ContainerState `json:"lastState,omitempty" protobuf:"bytes,3,opt,name=lastState"`
 	// Specifies whether the container has passed its readiness probe.
 	Ready bool `json:"ready" protobuf:"varint,4,opt,name=ready"`
@@ -1649,6 +1651,7 @@ type ContainerStatus struct {
 type PodPhase string
 
 // These are the valid statuses of pods.
+//见pkg/kubelet_pod中的GetPhase(),其中有完整计算Pod处于何种状态
 const (
 	// PodPending means the pod has been accepted by the system, but one or more of the containers
 	// has not been started. This includes time before being bound to a node, as well as time spent
@@ -1662,7 +1665,7 @@ const (
 	PodSucceeded PodPhase = "Succeeded" //pod中的容器自动停止,kubelet认为该Pod处于Terminated状态,见pkg/kubelet/kubelet_pod中podIsTerminated
 	// PodFailed means that all containers in the pod have terminated, and at least one container has
 	// terminated in a failure (exited with a non-zero exit code or was stopped by the system).
-	PodFailed PodPhase = "Failed"
+	PodFailed PodPhase = "Failed" //有容器处于Terminated状态而且ExitCode不为0,而且重启策略为Never,参考pkg/kubelet/kubelet_pod中的GetPhase()函数
 	// PodUnknown means that for some reason the state of the pod could not be obtained, typically due
 	// to an error in communicating with the host of the pod.
 	PodUnknown PodPhase = "Unknown"
@@ -3301,6 +3304,7 @@ type ListOptions struct {
 }
 
 // PodLogOptions is the query options for a Pod's logs REST call.
+//获取Pod的日志参数
 type PodLogOptions struct {
 	metav1.TypeMeta `json:",inline"`
 
@@ -3312,6 +3316,7 @@ type PodLogOptions struct {
 	Follow bool `json:"follow,omitempty" protobuf:"varint,2,opt,name=follow"`
 	// Return previous terminated container logs. Defaults to false.
 	// +optional
+	//是否返回上一个终止容器的日志,参考pkg/kubelet/kubelet_pod.go, 上一个终止容器的ID通过Pod.Status.ContainerStatuses.LastTerminatedState.ContainerID获得
 	Previous bool `json:"previous,omitempty" protobuf:"varint,3,opt,name=previous"`
 	// A relative time in seconds before the current time from which to show logs. If this value
 	// precedes the time a pod was started, only logs since the pod start will be returned.
@@ -3332,6 +3337,7 @@ type PodLogOptions struct {
 	// If set, the number of lines from the end of the logs to show. If not specified,
 	// logs are shown from the creation of the container or sinceSeconds or sinceTime
 	// +optional
+	//显示的行数
 	TailLines *int64 `json:"tailLines,omitempty" protobuf:"varint,7,opt,name=tailLines"`
 	// If set, the number of bytes to read from the server before terminating the
 	// log output. This may not display a complete final line of logging, and may return

@@ -64,6 +64,7 @@ func NewClientAccessFactory(optionalClientConfig clientcmd.ClientConfig) ClientA
 	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
 
 	clientConfig := optionalClientConfig
+	//使用默认的客户端配置
 	if optionalClientConfig == nil {
 		clientConfig = DefaultClientConfig(flags)
 	}

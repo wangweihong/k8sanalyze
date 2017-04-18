@@ -58,6 +58,7 @@ func (self *ResourceList) NvidiaGPU() *resource.Quantity {
 	return &resource.Quantity{}
 }
 
+//找到指定容器的状态
 func GetContainerStatus(statuses []ContainerStatus, name string) (ContainerStatus, bool) {
 	for i := range statuses {
 		if statuses[i].Name == name {

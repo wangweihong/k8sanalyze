@@ -22,6 +22,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1"
 )
 
+//见pkg/kubelet/kubelet_pods.go, validateContainerLogStatus(), 当容器处于waiting状态时,通过匹配reason和下面的错误,来确认waiting的真正的原因
 var (
 	// Container image pull failed, kubelet is backing off image pull
 	ErrImagePullBackOff = errors.New("ImagePullBackOff")
