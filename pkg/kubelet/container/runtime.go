@@ -261,6 +261,7 @@ func (id DockerID) ContainerID() ContainerID {
 type ContainerState string
 
 const (
+	//kubelet内部表示容器的状态.见pkg/kubelet/kubelet_pod, convertToAPIContainerStatuses()将根据kubeletcontainer状态转换成api container状态
 	ContainerStateCreated ContainerState = "created"
 	ContainerStateRunning ContainerState = "running"
 	ContainerStateExited  ContainerState = "exited"
@@ -291,6 +292,7 @@ type Container struct {
 
 // PodStatus represents the status of the pod and its containers.
 // v1.PodStatus can be derived from examining PodStatus and v1.Pod.
+//kubelet上Pod的状态
 type PodStatus struct {
 	// ID of the pod.
 	ID types.UID
@@ -308,6 +310,7 @@ type PodStatus struct {
 }
 
 // ContainerStatus represents the status of a container.
+//kubelet内部表示一个容器的状态
 type ContainerStatus struct {
 	// ID of the container.
 	ID ContainerID

@@ -20,7 +20,7 @@ import "k8s.io/kubernetes/pkg/api/v1"
 
 // PodAdmitAttributes is the context for a pod admission decision.
 // The member fields of this struct should never be mutated.
-//这个属性有什么作用?用于pod接受决议
+//这个属性有什么作用?用于pod接受决议,见kubelet的canAdmitPod()
 type PodAdmitAttributes struct {
 	// the pod to evaluate for admission
 	Pod *v1.Pod

@@ -104,6 +104,7 @@ func SetInitContainersAnnotations(pod *v1.Pod) error {
 }
 
 // TODO: remove this function when init containers becomes a stable feature
+//如果pod状态中存在初始容器状态,则将init容器状态的值压缩后保存在指定的annotation中
 func SetInitContainersStatusesAnnotations(pod *v1.Pod) error {
 	if len(pod.Status.InitContainerStatuses) > 0 {
 		value, err := json.Marshal(pod.Status.InitContainerStatuses)

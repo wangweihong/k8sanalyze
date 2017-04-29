@@ -65,7 +65,7 @@ type Manager interface {
 	// It is currently only used for testing.
 	SetPods(pods []*v1.Pod)
 	// AddPod adds the given pod to the manager.
-	AddPod(pod *v1.Pod)
+	AddPod(pod *v1.Pod) //将pod的信息加入到pod manager中,并没有创建一个真正可运行的Pod.见kubelet的HandlePodAdditions()
 	// UpdatePod updates the given pod in the manager.
 	UpdatePod(pod *v1.Pod)
 	// DeletePod deletes the given pod from the manager.  For mirror pods,

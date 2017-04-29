@@ -28,15 +28,15 @@ import (
 // considered ready to process if the timestamp has expired.
 type WorkQueue interface {
 	// GetWork dequeues and returns all ready items.
-	GetWork() []types.UID
+	GetWork() []types.UID //所有出栈时间早于当前时间的都出栈
 	// Enqueue inserts a new item or overwrites an existing item.
-	Enqueue(item types.UID, delay time.Duration)
+	Enqueue(item types.UID, delay time.Duration) // deploy
 }
 
 type basicWorkQueue struct {
 	clock clock.Clock
 	lock  sync.Mutex
-	queue map[types.UID]time.Time
+	queue map[types.UID]time.Time //记录每个ID的出栈时间(入栈时间+deplay时间)
 }
 
 var _ WorkQueue = &basicWorkQueue{}
@@ -46,10 +46,11 @@ func NewBasicWorkQueue(clock clock.Clock) WorkQueue {
 	return &basicWorkQueue{queue: queue, clock: clock}
 }
 
+//返回所有入栈时间早于当前时间的对象ID
 func (q *basicWorkQueue) GetWork() []types.UID {
 	q.lock.Lock()
 	defer q.lock.Unlock()
-	now := q.clock.Now()
+	now := q.clock.Now() //当前时间
 	var items []types.UID
 	for k, v := range q.queue {
 		if v.Before(now) {
@@ -60,6 +61,7 @@ func (q *basicWorkQueue) GetWork() []types.UID {
 	return items
 }
 
+//记录出栈时间
 func (q *basicWorkQueue) Enqueue(item types.UID, delay time.Duration) {
 	q.lock.Lock()
 	defer q.lock.Unlock()

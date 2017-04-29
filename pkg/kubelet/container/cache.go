@@ -34,7 +34,7 @@ import (
 // and the blocking GetNewerThan() method. The component responsible for
 // populating the cache is expected to call Delete() to explicitly free the
 // cache entries.
-//保存所有pod的状态?
+//保存所有pod的状态? 这和StatusManager之间的关系?
 type Cache interface {
 	Get(types.UID) (*PodStatus, error)
 	Set(types.UID, *PodStatus, error, time.Time)
@@ -199,7 +199,7 @@ func (c *cache) notify(id types.UID, timestamp time.Time) {
 }
 
 //添加订阅者到缓存中,这个是给谁订阅的?
-// 尝试获取指定pod,指定订阅时间之后的状态,如果该订阅时间的状态,则在订阅列表中等待
+// 尝试获取指定pod,指定订阅时间之后的状态,如果缓存的状态的时间比订阅时间早,则在订阅列表中等待
 func (c *cache) subscribe(id types.UID, timestamp time.Time) chan *data {
 	ch := make(chan *data, 1)
 	c.lock.Lock()

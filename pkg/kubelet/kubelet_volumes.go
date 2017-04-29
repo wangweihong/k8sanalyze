@@ -34,6 +34,7 @@ import (
 // The key in the map is the OuterVolumeSpecName (i.e. pod.Spec.Volumes[x].Name)
 func (kl *Kubelet) ListVolumesForPod(podUID types.UID) (map[string]volume.Volume, bool) {
 	volumesToReturn := make(map[string]volume.Volume)
+	//获取pod已经挂载的卷?
 	podVolumes := kl.volumeManager.GetMountedVolumesForPod(
 		volumetypes.UniquePodName(podUID))
 	for outerVolumeSpecName, volume := range podVolumes {

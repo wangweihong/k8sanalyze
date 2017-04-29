@@ -578,6 +578,7 @@ func (kl *Kubelet) makeEnvironmentVariables(pod *v1.Pod, container *v1.Container
 
 // podFieldSelectorRuntimeValue returns the runtime value of the given
 // selector for a pod.
+//???
 func (kl *Kubelet) podFieldSelectorRuntimeValue(fs *v1.ObjectFieldSelector, pod *v1.Pod, podIP string) (string, error) {
 	//??
 	internalFieldPath, _, err := api.Scheme.ConvertFieldLabel(fs.APIVersion, "Pod", fs.FieldPath, "")
@@ -684,7 +685,7 @@ func (kl *Kubelet) getPullSecretsForPod(pod *v1.Pod) ([]v1.Secret, error) {
 }
 
 // Returns true if pod is in the terminated state ("Failed" or "Succeeded").
-//判断一个Pod是否处于激活状态
+//判断一个Pod是否处于未激活状态
 func (kl *Kubelet) podIsTerminated(pod *v1.Pod) bool {
 	var status v1.PodStatus
 	// Check the cached pod status which was set after the last sync.
@@ -743,6 +744,7 @@ func (kl *Kubelet) HandlePodCleanups() error {
 		cgroupPods map[types.UID]cm.CgroupName
 		err        error
 	)
+	//?PerQOS??
 	if kl.cgroupsPerQOS {
 		pcm := kl.containerManager.NewPodContainerManager()
 		cgroupPods, err = pcm.GetAllPodsFromCgroups()
@@ -1037,12 +1039,12 @@ func GetPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 		}
 	}
 
-	unknown := 0
-	running := 0
-	waiting := 0
-	stopped := 0
-	failed := 0
-	succeeded := 0
+	unknown := 0   //无法获取容器状态或者无效状态的容器的统计
+	running := 0   //处于running状态的容器统计
+	waiting := 0   //处于Waiting状态,而且容器上一次终止状态为空的容器的统计
+	stopped := 0   //处于终止状态的容器统计 以及处于waitint状态而且容器上一次终止状态不为空的容器的统计
+	failed := 0    //处于终止状态,而且ExitCode不为0的容器统计
+	succeeded := 0 //处于终止状态,而且ExitCode为0的容器统计
 	//遍历所有容器,统计各状态容器的数量
 	for _, container := range spec.Containers {
 		containerStatus, ok := v1.GetContainerStatus(info, container.Name)
@@ -1119,6 +1121,7 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 	glog.V(3).Infof("Generating status for %q", format.Pod(pod))
 
 	// check if an internal module has requested the pod is evicted.
+	// 遍历kubelet的podSyncHandler,决定是否驱逐指定的Pod
 	for _, podSyncHandler := range kl.PodSyncHandlers {
 		if result := podSyncHandler.ShouldEvict(pod); result.Evict {
 			return v1.PodStatus{
@@ -1191,8 +1194,10 @@ func (kl *Kubelet) convertStatusToAPIStatus(pod *v1.Pod, podStatus *kubecontaine
 
 // convertToAPIContainerStatuses converts the given internal container
 // statuses into API container statuses.
+//将kubelet内部的ContaienrStatus 转换成api ContaienrStatus
 func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecontainer.PodStatus, previousStatus []v1.ContainerStatus, containers []v1.Container, hasInitContainers, isInitContainer bool) []v1.ContainerStatus {
 	convertContainerStatus := func(cs *kubecontainer.ContainerStatus) *v1.ContainerStatus {
+		//获得容器的ID
 		cid := cs.ID.String()
 		status := &v1.ContainerStatus{
 			Name:         cs.Name,
@@ -1201,6 +1206,7 @@ func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecon
 			ImageID:      cs.ImageID,
 			ContainerID:  cid,
 		}
+		//根据kubelet contaienr转换成api contaienr state
 		switch cs.State {
 		case kubecontainer.ContainerStateRunning:
 			status.State.Running = &v1.ContainerStateRunning{StartedAt: metav1.NewTime(cs.StartedAt)}
@@ -1462,6 +1468,7 @@ func (kl *Kubelet) GetAttach(podFullName string, podUID types.UID, containerName
 }
 
 // GetPortForward gets the URL the port-forward will be served from, or nil if the Kubelet will serve it.
+//???端口转发
 func (kl *Kubelet) GetPortForward(podName, podNamespace string, podUID types.UID) (*url.URL, error) {
 	switch streamingRuntime := kl.containerRuntime.(type) {
 	case kubecontainer.DirectStreamingRuntime:
@@ -1538,6 +1545,7 @@ func (kl *Kubelet) enableHostUserNamespace(pod *v1.Pod) bool {
 }
 
 // hasNonNamespacedCapability returns true if MKNOD, SYS_TIME, or SYS_MODULE is requested for any container.
+//检测容器是否拥有特定的能力(MKNODE/SYS_TIME/SYS_MODULE
 func hasNonNamespacedCapability(pod *v1.Pod) bool {
 	for _, c := range pod.Spec.Containers {
 		if c.SecurityContext != nil && c.SecurityContext.Capabilities != nil {
@@ -1553,6 +1561,7 @@ func hasNonNamespacedCapability(pod *v1.Pod) bool {
 }
 
 // hasHostVolume returns true if the pod spec has a HostPath volume.
+//检测Pod是否引用了hostPath卷
 func hasHostVolume(pod *v1.Pod) bool {
 	for _, v := range pod.Spec.Volumes {
 		if v.HostPath != nil {
@@ -1563,6 +1572,7 @@ func hasHostVolume(pod *v1.Pod) bool {
 }
 
 // hasHostNamespace returns true if hostIPC, hostNetwork, or hostPID are set to true.
+//检查Pod是否设置了HostIPC/HostNetwork/HostPID标志
 func hasHostNamespace(pod *v1.Pod) bool {
 	if pod.Spec.SecurityContext == nil {
 		return false
@@ -1571,6 +1581,7 @@ func hasHostNamespace(pod *v1.Pod) bool {
 }
 
 // hasHostMountPVC returns true if a PVC is referencing a HostPath volume.
+//检测Pod是否要有引用hostPath卷
 func (kl *Kubelet) hasHostMountPVC(pod *v1.Pod) bool {
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil {

@@ -222,7 +222,7 @@ type KubeletDeps struct {
 	OOMAdjuster    *oom.OOMAdjuster
 	OSInterface    kubecontainer.OSInterface
 	PodConfig      *config.PodConfig
-	Recorder       record.EventRecorder
+	Recorder       record.EventRecorder ///事件记录器
 	Writer         kubeio.Writer
 	VolumePlugins  []volume.VolumePlugin
 	TLSOptions     *server.TLSOptions
@@ -787,12 +787,15 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	if err != nil {
 		return nil, err
 	}
+	//pod_worker
 	klet.runtimeCache = runtimeCache
 	klet.reasonCache = NewReasonCache()
 	klet.workQueue = queue.NewBasicWorkQueue(klet.clock)
+	//syncPod,podWorker真正进行更新Pod的动作
 	klet.podWorkers = newPodWorkers(klet.syncPod, kubeDeps.Recorder, klet.workQueue, klet.resyncInterval, backOffPeriod, klet.podCache)
 
 	klet.backOff = flowcontrol.NewBackOff(backOffPeriod, MaxContainerBackOff)
+	//将po加入工作队列,并处理未传递的更新请求;如果没有未处理的,则更新worker为空闲状态
 	klet.podKillingCh = make(chan *kubecontainer.PodPair, podKillingChannelCapacity)
 	klet.setNodeStatusFuncs = klet.defaultNodeStatusFuncs()
 
@@ -948,7 +951,7 @@ type Kubelet struct {
 	// Handles container probing.
 	probeManager prober.Manager
 	// Manages container health check results.
-	livenessManager proberesults.Manager
+	livenessManager proberesults.Manager //用来探测Pod是否存活?
 
 	// How long to keep idle streaming command execution/port forwarding
 	// connections open before terminating them
@@ -970,8 +973,8 @@ type Kubelet struct {
 	machineInfo *cadvisorapi.MachineInfo
 
 	// Syncs pods statuses with apiserver; also used as a cache of statuses.
-	// 通过apiserver获取容器的状态?
-	statusManager status.Manager
+	statusManager status.Manager //缓存kubelet上Pod的状态,再更新apiserver上Pod的状态.注意还有一个pkg/kubelet/pod_worker.go中也提供Pod的状态更新
+	//还不清楚,这两者的区别.
 
 	// VolumeManager runs a set of asynchronous loops that figure out which
 	// volumes need to be attached/mounted/unmounted/detached based on the pods
@@ -1010,7 +1013,7 @@ type Kubelet struct {
 	pleg pleg.PodLifecycleEventGenerator
 
 	// Store kubecontainer.PodStatus for all pods.
-	podCache kubecontainer.Cache
+	podCache kubecontainer.Cache //缓存kubelet中所有Pod的状态.podworker将从podCache中获取pod的状态
 
 	// os is a facade for various syscalls that need to be mocked during testing.
 	os kubecontainer.OSInterface
@@ -1050,7 +1053,7 @@ type Kubelet struct {
 	syncLoopMonitor atomic.Value
 
 	// Container restart Backoff
-	backOff *flowcontrol.Backoff
+	backOff *flowcontrol.Backoff //重试
 
 	// Channel for sending pods to kill.
 	podKillingCh chan *kubecontainer.PodPair
@@ -1058,7 +1061,7 @@ type Kubelet struct {
 	// The configuration file used as the base to generate the container's
 	// DNS resolver configuration file. This can be used in conjunction with
 	// clusterDomain and clusterDNS.
-	resolverConfig string
+	resolverConfig string //容器的/etc/resolv.conf文件相关???
 
 	// Optionally shape the bandwidth of a pod
 	// TODO: remove when kubenet plugin is ready
@@ -1071,7 +1074,8 @@ type Kubelet struct {
 	daemonEndpoints *v1.NodeDaemonEndpoints //kubelet监听的端口,默认是10250,由kubelet的启动参数--port来控制
 
 	// A queue used to trigger pod workers.
-	workQueue queue.WorkQueue
+	workQueue queue.WorkQueue ///????和pkg/kubelet/pod_worker.go有关
+	//每次对Pod进行更新请求时,都会将该Pod加入该队列中.如果已存在,就更新出栈时间
 
 	// oneTimeInitializer is used to initialize modules that are dependent on the runtime to be up.
 	oneTimeInitializer sync.Once
@@ -1420,12 +1424,15 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	updateType := o.updateType
 
 	// if we want to kill a pod, do it now!
+	//更新类型是杀死一个Pod
 	if updateType == kubetypes.SyncPodKill {
 		killPodOptions := o.killPodOptions
 		if killPodOptions == nil || killPodOptions.PodStatusFunc == nil {
 			return fmt.Errorf("kill pod options are required if update type is kill")
 		}
+		//???
 		apiPodStatus := killPodOptions.PodStatusFunc(pod, podStatus)
+		//像apiserver更新Pod的状态
 		kl.statusManager.SetPodStatus(pod, apiPodStatus)
 		// we kill the pod with the specified grace period since this is a termination
 		if err := kl.killPod(pod, nil, podStatus, killPodOptions.PodTerminationGracePeriodSecondsOverride); err != nil {
@@ -1439,6 +1446,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	// Latency measurements for the main workflow are relative to the
 	// first time the pod was seen by the API server.
 	var firstSeenTime time.Time
+	//??
 	if firstSeenTimeStr, ok := pod.Annotations[kubetypes.ConfigFirstSeenAnnotationKey]; ok {
 		firstSeenTime = kubetypes.ConvertToTimestamp(firstSeenTimeStr).Get()
 	}
@@ -1469,6 +1477,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 		metrics.PodStartLatency.Observe(metrics.SinceInMicroseconds(firstSeenTime))
 	}
 
+	//决策kubelet是否能运行指定的pod,如果决议失败;更新pod的状态
 	runnable := kl.canRunPod(pod)
 	if !runnable.Admit {
 		// Pod is not runnable; update the Pod and Container statuses to why.
@@ -1631,7 +1640,9 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 // Get pods which should be resynchronized. Currently, the following pod should be resynchronized:
 //   * pod whose work is ready.
 //   * internal modules that request sync of a pod.
+//获取Kubelet上需要同步的Pod
 func (kl *Kubelet) getPodsToSync() []*v1.Pod {
+	//获取kubelet上所有的Pod
 	allPods := kl.podManager.GetPods()
 	podUIDs := kl.workQueue.GetWork()
 	podUIDSet := sets.NewString()
@@ -1670,6 +1681,7 @@ func (kl *Kubelet) deletePod(pod *v1.Pod) error {
 		// for sources that haven't reported yet.
 		return fmt.Errorf("skipping delete because sources aren't ready yet")
 	}
+	//关闭指定Pod的pod goroutine
 	kl.podWorkers.ForgetWorker(pod.UID)
 
 	// Runtime cache may not have been updated to with the pod, but it's okay
@@ -1717,8 +1729,10 @@ func (kl *Kubelet) isOutOfDisk() bool {
 
 // rejectPod records an event about the pod with the given reason and message,
 // and updates the pod to the failed phase in the status manage.
+//更新Pod的状态为失败,并更新状态到apiserver
 func (kl *Kubelet) rejectPod(pod *v1.Pod, reason, message string) {
 	kl.recorder.Eventf(pod, v1.EventTypeWarning, reason, message)
+	//更新Pod的状态为PoddFailed,并记录原因
 	kl.statusManager.SetPodStatus(pod, v1.PodStatus{
 		Phase:   v1.PodFailed,
 		Reason:  reason,
@@ -1730,6 +1744,7 @@ func (kl *Kubelet) rejectPod(pod *v1.Pod, reason, message string) {
 // The function returns a boolean value indicating whether the pod
 // can be admitted, a brief single-word reason and a message explaining why
 // the pod cannot be admitted.
+//见HandlePodAdditions(),pods是kubelet中没有terminated的pods
 func (kl *Kubelet) canAdmitPod(pods []*v1.Pod, pod *v1.Pod) (bool, string, string) {
 	// the kubelet will invoke each pod admit handler in sequence
 	// if any handler rejects, the pod is rejected.
@@ -1754,12 +1769,14 @@ func (kl *Kubelet) canAdmitPod(pods []*v1.Pod, pod *v1.Pod) (bool, string, strin
 	return true, "", ""
 }
 
-//检测kubelet能够运行指定的Pod?
+//检测kubelet能够运行指定的Pod
 func (kl *Kubelet) canRunPod(pod *v1.Pod) lifecycle.PodAdmitResult {
 	attrs := &lifecycle.PodAdmitAttributes{Pod: pod}
 	// Get "OtherPods". Rejected pods are failed, so only include admitted pods that are alive.
+	//获取kubelet中没有terminated的Pod
 	attrs.OtherPods = kl.filterOutTerminatedPods(kl.podManager.GetPods())
 
+	//决定一个Pod是否允许运行
 	for _, handler := range kl.softAdmitHandlers {
 		if result := handler.Admit(attrs); !result.Admit {
 			return result
@@ -1767,6 +1784,7 @@ func (kl *Kubelet) canRunPod(pod *v1.Pod) lifecycle.PodAdmitResult {
 	}
 
 	// TODO: Refactor as a soft admit handler.
+	//检测Pod中的容器的Capalibity是否允许运行
 	if err := canRunPod(pod); err != nil {
 		return lifecycle.PodAdmitResult{
 			Admit:   false,
@@ -1986,6 +2004,7 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 	// Pass critical pods through admission check first.
 	var criticalPods []*v1.Pod
 	var nonCriticalPods []*v1.Pod
+	//对Pod进行重要和非重要划分
 	for _, p := range pods {
 		if kubetypes.IsCriticalPod(p) {
 			criticalPods = append(criticalPods, p)
@@ -1993,15 +2012,19 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 			nonCriticalPods = append(nonCriticalPods, p)
 		}
 	}
+	//按照创建时间排序
 	sort.Sort(sliceutils.PodsByCreationTime(criticalPods))
 	sort.Sort(sliceutils.PodsByCreationTime(nonCriticalPods))
 
+	//遍历所有的Pod,优先处理先创建的重要Pod,再处理先创建的非重要Pod
 	for _, pod := range append(criticalPods, nonCriticalPods...) {
+		//获取Kubelet上所有的Pod
 		existingPods := kl.podManager.GetPods()
 		// Always add the pod to the pod manager. Kubelet relies on the pod
 		// manager as the source of truth for the desired state. If a pod does
 		// not exist in the pod manager, it means that it has been deleted in
 		// the apiserver and no action (other than cleanup) is required.
+		//添加Pod的信息到kubelet的Pod manager
 		kl.podManager.AddPod(pod)
 
 		if kubepod.IsMirrorPod(pod) {
@@ -2009,16 +2032,20 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 			continue
 		}
 
+		//pod是否仍处于激活状态
 		if !kl.podIsTerminated(pod) {
 			// Only go through the admission process if the pod is not
 			// terminated.
 
 			// We failed pods that we rejected, so activePods include all admitted
 			// pods that are alive.
+			//找出仍然存活的pod
 			activePods := kl.filterOutTerminatedPods(existingPods)
 
 			// Check if we can admit the pod; if not, reject it.
+			//决策一个Pod是否允许接收
 			if ok, reason, message := kl.canAdmitPod(activePods, pod); !ok {
+				//更新Pod的状态为PodFailed以及相应的拒绝信息
 				kl.rejectPod(pod, reason, message)
 				continue
 			}

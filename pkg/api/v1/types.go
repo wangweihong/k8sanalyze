@@ -1619,6 +1619,8 @@ type ContainerState struct {
 type ContainerStatus struct {
 	// This must be a DNS_LABEL. Each container in a pod must have a unique name.
 	// Cannot be updated.
+	//这个容器名并不直接对应docker/rkt中的容器名.是一个抽象的容器名
+	//在每次重启时,该容器名将会映射不同的docker/rkt容器ID(见当前映射的容器ID(State.ContainerID)/上一次映射的容器的ID(LastTerminationState.Terminated.ContainerID))
 	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
 	// Details about the container's current condition.
 	// +optional
@@ -1629,7 +1631,7 @@ type ContainerStatus struct {
 	//上一次终止状态
 	LastTerminationState ContainerState `json:"lastState,omitempty" protobuf:"bytes,3,opt,name=lastState"`
 	// Specifies whether the container has passed its readiness probe.
-	Ready bool `json:"ready" protobuf:"varint,4,opt,name=ready"`
+	Ready bool `json:"ready" protobuf:"varint,4,opt,name=ready"` //Readiness探测是否通过
 	// The number of times the container has been restarted, currently based on
 	// the number of dead containers that have not yet been removed.
 	// Note that this is calculated from dead containers. But those containers are subject to
@@ -1672,6 +1674,7 @@ const (
 )
 
 // PodConditionType is a valid value for PodCondition.Type
+//这个和podPhase使用的场景?什么情况下需要检测这个??
 type PodConditionType string
 
 // These are valid conditions of pod.
@@ -1689,7 +1692,7 @@ const (
 )
 
 // PodCondition contains details for the current condition of this pod.
-//描述Pod的状态?
+//描述Pod的状态?是记录每一次Pod的状态吗?以及探测时间吗?
 type PodCondition struct {
 	// Type is the type of the condition.
 	// Currently only Ready.
@@ -2213,7 +2216,7 @@ type PodStatus struct {
 	// Current service state of pod.
 	// More info: http://kubernetes.io/docs/user-guide/pod-states#pod-conditions
 	// +optional
-	//??? pod的当前状态?
+	//??? pod的当前状态? 为什么是数组??
 	Conditions []PodCondition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,2,rep,name=conditions"`
 	// A human readable message indicating details about why the pod is in this condition.
 	// +optional

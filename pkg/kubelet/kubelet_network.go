@@ -188,6 +188,7 @@ func (kl *Kubelet) syncNetworkStatus() {
 
 // updatePodCIDR updates the pod CIDR in the runtime state if it is different
 // from the current CIDR.
+//更新Pod的子网
 func (kl *Kubelet) updatePodCIDR(cidr string) {
 	//???
 	podCIDR := kl.runtimeState.podCIDR()
