@@ -58,7 +58,7 @@ type ImageStats struct {
 // Runtime interface defines the interfaces that should be implemented
 // by a container runtime.
 // Thread safety is required from implementations of this interface.
-//所有真正获取资源信息的接口
+//所有真正处理容器/Pod的接口
 type Runtime interface {
 	// Type returns the type of the container runtime.
 	Type() string
@@ -77,7 +77,7 @@ type Runtime interface {
 	// GetPods returns a list of containers grouped by pods. The boolean parameter
 	// specifies whether the runtime returns all containers including those already
 	// exited and dead containers (used for garbage collection).
-	GetPods(all bool) ([]*Pod, error)
+	GetPods(all bool) ([]*Pod, error) //根据容器,组织成kubelet pod.也就是说kubelet Pod实际上就是在这里创建.
 	// GarbageCollect removes dead containers using the specified container gc policy
 	// If allSourcesReady is not true, it means that kubelet doesn't have the
 	// complete list of pods from all avialble sources (e.g., apiserver, http,
@@ -95,7 +95,7 @@ type Runtime interface {
 	KillPod(pod *v1.Pod, runningPod Pod, gracePeriodOverride *int64) error
 	// GetPodStatus retrieves the status of the pod, including the
 	// information of all containers in the pod that are visble in Runtime.
-	GetPodStatus(uid types.UID, name, namespace string) (*PodStatus, error)
+	GetPodStatus(uid types.UID, name, namespace string) (*PodStatus, error) //根据容器的状态, 生成kubelet Pod status
 	// Returns the filesystem path of the pod's network namespace; if the
 	// runtime does not handle namespace creation itself, or cannot return
 	// the network namespace path, it should return an error.
@@ -173,6 +173,7 @@ type ContainerCommandRunner interface {
 
 // Pod is a group of containers.
 //这里是kubelet对pod的描述?对,kubelet_getter.go中的GetRunningPods()有将Pod转换成api pod的例子
+//注意kubelet pod并没有关于状态的描述
 type Pod struct {
 	// The ID of the pod, which can be used to retrieve a particular pod
 	// from the pod list returned by GetPods().
@@ -201,11 +202,11 @@ type PodPair struct {
 // ContainerID is a type that identifies a container.
 type ContainerID struct {
 	// The type of the container runtime. e.g. 'docker', 'rkt'.
-	Type string
+	Type string //容器类型
 	// The identification of the container, this is comsumable by
 	// the underlying container runtime. (Note that the container
 	// runtime interface still takes the whole struct as input).
-	ID string
+	ID string //容器ID
 }
 
 func BuildContainerID(typ, ID string) ContainerID {
@@ -222,6 +223,7 @@ func ParseContainerID(containerID string) ContainerID {
 	return id
 }
 
+//解析api容器ID字符串为容器类型和容器ID
 func (c *ContainerID) ParseString(data string) error {
 	// Trim the quotes and split the type and ID.
 	parts := strings.Split(strings.Trim(data, "\""), "://")
@@ -262,6 +264,7 @@ type ContainerState string
 
 const (
 	//kubelet内部表示容器的状态.见pkg/kubelet/kubelet_pod, convertToAPIContainerStatuses()将根据kubeletcontainer状态转换成api container状态
+	//pleg/generic.go中,convertState也将容器状态转换成Pleg状态
 	ContainerStateCreated ContainerState = "created"
 	ContainerStateRunning ContainerState = "running"
 	ContainerStateExited  ContainerState = "exited"
@@ -293,6 +296,8 @@ type Container struct {
 // PodStatus represents the status of the pod and its containers.
 // v1.PodStatus can be derived from examining PodStatus and v1.Pod.
 //kubelet上Pod的状态
+//注意,并没有明确的字段描述Pod的状态,而是只保存容器和sandbox的状态
+//由runtime.GetPodStatus()生成
 type PodStatus struct {
 	// ID of the pod.
 	ID types.UID
@@ -301,9 +306,9 @@ type PodStatus struct {
 	// Namspace of the pod.
 	Namespace string
 	// IP of the pod.
-	IP string
+	IP string //这个IP是什么时候设置的,同样是GetPodStatus设置的
 	// Status of containers in the pod.
-	ContainerStatuses []*ContainerStatus
+	ContainerStatuses []*ContainerStatus //通过底层的容器管理器获取容器状态,并保存到Pod中
 	// Status of the pod sandbox.
 	// Only for kuberuntime now, other runtime may keep it nil.
 	SandboxStatuses []*runtimeapi.PodSandboxStatus
@@ -311,6 +316,7 @@ type PodStatus struct {
 
 // ContainerStatus represents the status of a container.
 //kubelet内部表示一个容器的状态
+//runtime.GetPodStatus()根据容器信息生成
 type ContainerStatus struct {
 	// ID of the container.
 	ID ContainerID

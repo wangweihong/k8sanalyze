@@ -176,7 +176,7 @@ type KubeletConfiguration struct {
 	DockerEndpoint string
 	// rootDirectory is the directory path to place kubelet files (volume
 	// mounts,etc).
-	RootDirectory string
+	RootDirectory string //kubelet根目录?
 	// seccompProfileRoot is the directory path for seccomp profiles.
 	SeccompProfileRoot string
 	// allowPrivileged enables containers to request privileged mode.

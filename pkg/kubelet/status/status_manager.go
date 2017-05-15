@@ -103,7 +103,7 @@ type Manager interface {
 	RemoveOrphanedStatuses(podUIDs map[types.UID]bool)
 }
 
-//状态同步周期?
+//状态同步周期
 const syncPeriod = 10 * time.Second
 
 //pod manager是kubelet的podManager
@@ -455,24 +455,23 @@ func (m *manager) syncPod(uid types.UID, status versionedPodStatus) {
 			m.deletePodStatus(uid)
 			return
 		}
-		//设置pod的状态
+		//更新Pod的状态
 		pod.Status = status.status
 		//如果pod的状态中有初始容器的状态,则压缩后保存在pod指定的annotation中
 		if err := podutil.SetInitContainersStatusesAnnotations(pod); err != nil {
 			glog.Error(err)
 		}
 		// TODO: handle conflict as a retry, make that easier too.
-		//更新指定pod的状态(?和update之间的区别?)
+		//更新指定Pod的状态.
 		pod, err = m.kubeClient.Core().Pods(pod.Namespace).UpdateStatus(pod)
 		if err == nil {
 			glog.V(3).Infof("Status for pod %q updated successfully: %+v", format.Pod(pod), status)
 			m.apiStatusVersions[pod.UID] = status.version //更新Pod的版本
-			//没有理解?,为什么需要删除指定的Pod
 			if kubepod.IsMirrorPod(pod) {
 				// We don't handle graceful deletion of mirror pods.
 				return
 			}
-			//pod是否指定删除时间栈?
+			//pod是否指定删除时间栈? api Pod被要求删除?这里不明白?
 			if pod.DeletionTimestamp == nil {
 				return
 			}
@@ -516,6 +515,7 @@ func (m *manager) needsUpdate(uid types.UID, status versionedPodStatus) bool {
 // now the pod manager only supports getting mirror pod by static pod, so we have to pass
 // static pod uid here.
 // TODO(random-liu): Simplify the logic when mirror pod manager is added.
+//状态需要调整?
 func (m *manager) needsReconcile(uid types.UID, status v1.PodStatus) bool {
 	// The pod could be a static pod, so we should translate first.
 	pod, ok := m.podManager.GetPodByUID(uid)

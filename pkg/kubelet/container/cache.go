@@ -35,22 +35,23 @@ import (
 // populating the cache is expected to call Delete() to explicitly free the
 // cache entries.
 //保存所有pod的状态? 这和StatusManager之间的关系?
+//pod_workers.go在获取Pod更新请求时, 将会向Cache获取pod的最新状态
 type Cache interface {
 	Get(types.UID) (*PodStatus, error)
-	Set(types.UID, *PodStatus, error, time.Time)
+	Set(types.UID, *PodStatus, error, time.Time) //更新pod的状态
 	// GetNewerThan is a blocking call that only returns the status
 	// when it is newer than the given time.
-	GetNewerThan(types.UID, time.Time) (*PodStatus, error)
+	GetNewerThan(types.UID, time.Time) (*PodStatus, error) //获取指定时间之后的Pod的状态
 	Delete(types.UID)
-	UpdateTime(time.Time)
+	UpdateTime(time.Time) //更新cache的时间戳,唤醒所有时间早于时间戳的订阅者.
 }
 
-//这个data维护一个pod的更新
+//这个data维护一个pod 状态的更新
 type data struct {
 	// Status of the pod.
-	status *PodStatus
+	status *PodStatus //pod的状态
 	// Error got when trying to inspect the pod.
-	err error
+	err error //获取Pod状态时出错信息
 	// Time when the data was last modified.
 	modified time.Time //更新时间
 }
@@ -62,6 +63,7 @@ type subRecord struct {
 }
 
 // cache implements Cache.
+//注意
 type cache struct {
 	// Lock which guards all internal data structures.
 	lock sync.RWMutex

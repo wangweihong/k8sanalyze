@@ -135,12 +135,12 @@ const (
 	// Note that even though we set the period to 1s, the relisting itself can
 	// take more than 1s to finish if the container runtime responds slowly
 	// and/or when there are many container changes in one cycle.
-	plegRelistPeriod = time.Second * 1
+	plegRelistPeriod = time.Second * 1 //pleg relist周期
 
 	// backOffPeriod is the period to back off when pod syncing results in an
 	// error. It is also used as the base period for the exponential backoff
 	// container restarts and image pulls.
-	backOffPeriod = time.Second * 10
+	backOffPeriod = time.Second * 10 //10秒重试周期
 
 	// Period for performing container garbage collection.
 	ContainerGCPeriod = time.Minute
@@ -432,7 +432,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	//管理容器的引用计数,这个引用计数有什么作用?会对Pod造成什么样的影响
 	containerRefManager := kubecontainer.NewRefManager()
 
-	//监控什么的OOM
+	//监控系统 OOM
 	oomWatcher := NewOOMWatcher(kubeDeps.CAdvisorInterface, kubeDeps.Recorder)
 
 	klet := &Kubelet{
@@ -497,6 +497,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		glog.Infof("Experimental host user namespace defaulting is enabled.")
 	}
 
+	//??发夹模式?
 	if mode, err := effectiveHairpinMode(componentconfig.HairpinMode(kubeCfg.HairpinMode), kubeCfg.ContainerRuntime, kubeCfg.NetworkPluginName); err != nil {
 		// This is a non-recoverable error. Returning it up the callstack will just
 		// lead to retries of the same failure, so just fail hard.
@@ -524,7 +525,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	//这是一组包含多个时间段的对象
 	imageBackOff := flowcontrol.NewBackOff(backOffPeriod, MaxContainerBackOff)
 
-	//Pod的liveness管理器
+	//Pod的liveness容器探测结果管理器
 	klet.livenessManager = proberesults.NewManager()
 
 	//这里保存这Pod相关的状态信息
@@ -726,6 +727,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 	//资源分析器?这个分析器的作用?
 	klet.resourceAnalyzer = stats.NewResourceAnalyzer(klet, kubeCfg.VolumeStatsAggPeriod.Duration, klet.containerRuntime)
 
+	//pod生命周期时间产生器
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
 	klet.updatePodCIDR(kubeCfg.PodCIDR)
@@ -951,7 +953,7 @@ type Kubelet struct {
 	// Handles container probing.
 	probeManager prober.Manager
 	// Manages container health check results.
-	livenessManager proberesults.Manager //用来探测Pod是否存活?
+	livenessManager proberesults.Manager //用来探测Pod是否存活?不是,其中缓存着各个容器的探测状态
 
 	// How long to keep idle streaming command execution/port forwarding
 	// connections open before terminating them
@@ -1010,7 +1012,7 @@ type Kubelet struct {
 	nodeStatusUpdateFrequency time.Duration // kubelet的启动参数--node-status-update-frequency设置
 
 	// Generates pod events.
-	pleg pleg.PodLifecycleEventGenerator
+	pleg pleg.PodLifecycleEventGenerator //pod生命周期时间产生器
 
 	// Store kubecontainer.PodStatus for all pods.
 	podCache kubecontainer.Cache //缓存kubelet中所有Pod的状态.podworker将从podCache中获取pod的状态
@@ -1416,6 +1418,7 @@ func (kl *Kubelet) GetClusterDNS(pod *v1.Pod) ([]string, []string, error) {
 //
 // If any step of this workflow errors, the error is returned, and is repeated
 // on the next syncPod call.
+//????这里传递的参数已经是api pod?那么更新类型为create的意义是什么?
 func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	// pull out the required options
 	pod := o.pod
@@ -1432,7 +1435,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 		}
 		//???
 		apiPodStatus := killPodOptions.PodStatusFunc(pod, podStatus)
-		//像apiserver更新Pod的状态
+		//向apiserver更新Pod的状态
 		kl.statusManager.SetPodStatus(pod, apiPodStatus)
 		// we kill the pod with the specified grace period since this is a termination
 		if err := kl.killPod(pod, nil, podStatus, killPodOptions.PodTerminationGracePeriodSecondsOverride); err != nil {
@@ -1446,7 +1449,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	// Latency measurements for the main workflow are relative to the
 	// first time the pod was seen by the API server.
 	var firstSeenTime time.Time
-	//??
+	//?? api server第一次看到Pod的时间?
 	if firstSeenTimeStr, ok := pod.Annotations[kubetypes.ConfigFirstSeenAnnotationKey]; ok {
 		firstSeenTime = kubetypes.ConvertToTimestamp(firstSeenTimeStr).Get()
 	}
@@ -1464,13 +1467,16 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	}
 
 	// Generate final API pod status with pod and status manager status
+	//根据kubelet pod status 转换成api pod pod status
 	apiPodStatus := kl.generateAPIPodStatus(pod, podStatus)
 	// The pod IP may be changed in generateAPIPodStatus if the pod is using host network. (See #24576)
 	// TODO(random-liu): After writing pod spec into container labels, check whether pod is using host network, and
 	// set pod IP to hostIP directly in runtime.GetPodStatus
+	//???
 	podStatus.IP = apiPodStatus.PodIP
 
 	// Record the time it takes for the pod to become running.
+	///??????
 	existingStatus, ok := kl.statusManager.GetPodStatus(pod.UID)
 	if !ok || existingStatus.Phase == v1.PodPending && apiPodStatus.Phase == v1.PodRunning &&
 		!firstSeenTime.IsZero() {
@@ -1479,6 +1485,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 
 	//决策kubelet是否能运行指定的pod,如果决议失败;更新pod的状态
 	runnable := kl.canRunPod(pod)
+	//不允许
 	if !runnable.Admit {
 		// Pod is not runnable; update the Pod and Container statuses to why.
 		apiPodStatus.Reason = runnable.Reason
@@ -1498,6 +1505,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	}
 
 	// Update status in the status manager
+	//更新状态?
 	kl.statusManager.SetPodStatus(pod, apiPodStatus)
 
 	// Kill pod if it should not be running
@@ -1681,7 +1689,7 @@ func (kl *Kubelet) deletePod(pod *v1.Pod) error {
 		// for sources that haven't reported yet.
 		return fmt.Errorf("skipping delete because sources aren't ready yet")
 	}
-	//关闭指定Pod的pod goroutine
+	//关闭指定Pod的pod worker goroutine
 	kl.podWorkers.ForgetWorker(pod.UID)
 
 	// Runtime cache may not have been updated to with the pod, but it's okay

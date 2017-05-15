@@ -67,6 +67,7 @@ type worker struct {
 }
 
 // Creates and starts a new probe worker.
+//   容器探测器
 func newWorker(
 	m *manager,
 	probeType probeType,
@@ -96,6 +97,7 @@ func newWorker(
 }
 
 // run periodically probes the container.
+// 运行探测器
 func (w *worker) run() {
 	probeTickerPeriod := time.Duration(w.spec.PeriodSeconds) * time.Second
 	probeTicker := time.NewTicker(probeTickerPeriod)

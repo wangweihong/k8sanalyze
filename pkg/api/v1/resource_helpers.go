@@ -115,6 +115,7 @@ func GetPodReadyCondition(status PodStatus) *PodCondition {
 
 // GetPodCondition extracts the provided condition from the given status and returns that.
 // Returns nil and -1 if the condition is not present, and the index of the located condition.
+//获取指定类型的Pod condition
 func GetPodCondition(status *PodStatus, conditionType PodConditionType) (int, *PodCondition) {
 	if status == nil {
 		return -1, nil
@@ -144,6 +145,7 @@ func GetNodeCondition(status *NodeStatus, conditionType NodeConditionType) (int,
 // Updates existing pod condition or creates a new one. Sets LastTransitionTime to now if the
 // status has changed.
 // Returns true if pod condition has changed or has been added.
+//
 func UpdatePodCondition(status *PodStatus, condition *PodCondition) bool {
 	condition.LastTransitionTime = metav1.Now()
 	// Try to find this pod condition.

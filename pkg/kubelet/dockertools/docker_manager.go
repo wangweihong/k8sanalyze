@@ -871,6 +871,7 @@ func getPodInfoFromContainer(c *dockertypes.Container) (kubetypes.UID, string, s
 	if err != nil {
 		return kubetypes.UID(""), "", "", err
 	}
+	//将容器名进行_分隔
 	name, namespace, err := kubecontainer.ParsePodFullName(dockerName.PodFullName)
 	if err != nil {
 		return kubetypes.UID(""), "", "", fmt.Errorf("parse pod full name %q error: %v", dockerName.PodFullName, err)
@@ -906,6 +907,10 @@ func (dm *DockerManager) GetPods(all bool) ([]*kubecontainer.Pod, error) {
 	pods := make(map[kubetypes.UID]*kubecontainer.Pod)
 	var result []*kubecontainer.Pod
 
+	//获得所有和k8s有关的容器
+	//k8s创建的容器名都有"/k8s_"前缀,
+	// "/k8s_POD.9b35dba1_etcd-ubuntu_kube-system_66172e7210f2355e810aa2d028156a82_db005967"
+	//注意,docker ps看到的容器名不正确,要通过docker inspect才能看到正确的容器名
 	containers, err := GetKubeletDockerContainers(dm.client, all)
 	if err != nil {
 		return nil, err
@@ -913,6 +918,7 @@ func (dm *DockerManager) GetPods(all bool) ([]*kubecontainer.Pod, error) {
 
 	// Group containers by pod.
 	for _, c := range containers {
+		//将docker container转换成kubelet container
 		converted, err := toRuntimeContainer(c)
 		if err != nil {
 			glog.Errorf("Error examining the container %v: %v", c.ID, err)
@@ -1333,11 +1339,13 @@ func noPodInfraContainerError(podName, podNamespace string) error {
 //  - should we support nsenter + socat on the host? (current impl)
 //  - should we support nsenter + socat in a container, running with elevated privs and --pid=host?
 func (dm *DockerManager) PortForward(pod *kubecontainer.Pod, port uint16, stream io.ReadWriteCloser) error {
+	//找到pod中名为为"POD"的容器
 	podInfraContainer := pod.FindContainerByName(PodInfraContainerName)
 	if podInfraContainer == nil {
 		return noPodInfraContainerError(pod.Name, pod.Namespace)
 	}
 
+	//调用nsenter进入"POD"容器,利用socat执行端口转发
 	return PortForward(dm.client, podInfraContainer.ID.ID, port, stream)
 }
 

@@ -25,10 +25,10 @@ import (
 
 // GeneratePodReadyCondition returns ready condition if all containers in a pod are ready, else it
 // returns an unready condition.
-//生成pod准备状态?
+//检测Pod中容器是否服务就绪,返回相应的ready Condition
 func GeneratePodReadyCondition(spec *v1.PodSpec, containerStatuses []v1.ContainerStatus, podPhase v1.PodPhase) v1.PodCondition {
 	// Find if all containers are ready or not.
-	//pod的容器状态列表
+	//获取不到容器状态列表
 	if containerStatuses == nil {
 		return v1.PodCondition{
 			Type:   v1.PodReady,
@@ -40,7 +40,7 @@ func GeneratePodReadyCondition(spec *v1.PodSpec, containerStatuses []v1.Containe
 	unreadyContainers := []string{}
 	//遍历所有的容器
 	for _, container := range spec.Containers {
-		//获取指定容器的让你哦改期状态,如果容器状态没有设置Ready,添加容器到unreadyContainers列表中
+		//获取指定容器的就绪状态,如果容器状态没有设置Ready,添加容器到unreadyContainers列表中
 		if containerStatus, ok := v1.GetContainerStatus(containerStatuses, container.Name); ok {
 			if !containerStatus.Ready {
 				unreadyContainers = append(unreadyContainers, container.Name)
@@ -56,7 +56,7 @@ func GeneratePodReadyCondition(spec *v1.PodSpec, containerStatuses []v1.Containe
 	if podPhase == v1.PodSucceeded && len(unknownContainers) == 0 {
 		return v1.PodCondition{
 			Type:   v1.PodReady,
-			Status: v1.ConditionFalse, ///???为什么返回这个?
+			Status: v1.ConditionFalse, ///???为什么返回这个? 因为这里查询的Ready Condition,即服务就绪状态.容器已完成,就无法提供服务
 			Reason: "PodCompleted",
 		}
 	}

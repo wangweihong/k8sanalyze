@@ -27,6 +27,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/runtime"
 )
 
+//利用cadvisor监听整个系统OOM事件,并记录
 type OOMWatcher interface {
 	Start(ref *v1.ObjectReference) error
 }
@@ -47,6 +48,7 @@ const systemOOMEvent = "SystemOOM"
 
 // Watches cadvisor for system oom's and records an event for every system oom encountered.
 func (ow *realOOMWatcher) Start(ref *v1.ObjectReference) error {
+	//
 	request := events.Request{
 		EventType: map[cadvisorapi.EventType]bool{
 			cadvisorapi.EventOom: true,
@@ -62,6 +64,7 @@ func (ow *realOOMWatcher) Start(ref *v1.ObjectReference) error {
 	go func() {
 		defer runtime.HandleCrash()
 
+		//一直循环接收事件Channel发送过来的信息,直到事件Channel关闭
 		for event := range eventChannel.GetChannel() {
 			glog.V(2).Infof("Got sys oom event from cadvisor: %v", event)
 			ow.recorder.PastEventf(ref, metav1.Time{Time: event.Timestamp}, v1.EventTypeWarning, systemOOMEvent, "System OOM encountered")

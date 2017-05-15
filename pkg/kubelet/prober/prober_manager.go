@@ -59,23 +59,24 @@ type Manager interface {
 
 type manager struct {
 	// Map of active workers for probes
-	workers map[probeKey]*worker
+	workers map[probeKey]*worker //Pod/容器的探测器.每个Pod中每个容器,根据设置的探测类型的不同启动一个探测器
 	// Lock for accessing & mutating workers
 	workerLock sync.RWMutex
 
 	// The statusManager cache provides pod IP and container IDs for probing.
-	statusManager status.Manager
+	statusManager status.Manager //Pod状态管理器
 
 	// readinessManager manages the results of readiness probes
-	readinessManager results.Manager
+	readinessManager results.Manager //readiness 容器探测结果
 
 	// livenessManager manages the results of liveness probes
-	livenessManager results.Manager
+	livenessManager results.Manager //liveness容器探测结果
 
 	// prober executes the probe actions.
-	prober *prober
+	prober *prober //真正进行容器检测
 }
 
+//livenssManager存放容器的探测结果
 func NewManager(
 	statusManager status.Manager,
 	livenessManager results.Manager,
@@ -83,8 +84,8 @@ func NewManager(
 	refManager *kubecontainer.RefManager,
 	recorder record.EventRecorder) Manager {
 
-	prober := newProber(runner, refManager, recorder)
-	readinessManager := results.NewManager()
+	prober := newProber(runner, refManager, recorder) //新探测器
+	readinessManager := results.NewManager()          //存放容器的探测结果
 	return &manager{
 		statusManager:    statusManager,
 		prober:           prober,
@@ -102,9 +103,9 @@ func (m *manager) Start() {
 
 // Key uniquely identifying container probes
 type probeKey struct {
-	podUID        types.UID
-	containerName string
-	probeType     probeType
+	podUID        types.UID //探测Pod
+	containerName string    //探测容器
+	probeType     probeType //readinss/livenss 探测类型
 }
 
 // Type of probe (readiness or liveness)
@@ -132,6 +133,7 @@ func (m *manager) AddPod(pod *v1.Pod) {
 	defer m.workerLock.Unlock()
 
 	key := probeKey{podUID: pod.UID}
+	//遍历Pod中所有容器,如果配置了readiness,为容器创建探测器
 	for _, c := range pod.Spec.Containers {
 		key.containerName = c.Name
 
@@ -142,6 +144,7 @@ func (m *manager) AddPod(pod *v1.Pod) {
 					format.Pod(pod), c.Name)
 				return
 			}
+			//创建新的探测器
 			w := newWorker(m, readiness, pod, c)
 			m.workers[key] = w
 			go w.run()
@@ -193,15 +196,21 @@ func (m *manager) CleanupPods(activePods []*v1.Pod) {
 	}
 }
 
+//确认Pod中的容器是否提供服务,并更新 api pod status各容器的Ready项
 func (m *manager) UpdatePodStatus(podUID types.UID, podStatus *v1.PodStatus) {
+	//遍历apoi pod的容器状态
 	for i, c := range podStatus.ContainerStatuses {
 		var ready bool
+		//如果容器没有在运行
 		if c.State.Running == nil {
 			ready = false
+			//api container的容器ID由容器类型(docker/rkt)+"://"+容器ID组成
+			// 获取容器能否提供服务的结论
 		} else if result, ok := m.readinessManager.Get(kubecontainer.ParseContainerID(c.ContainerID)); ok {
 			ready = result == results.Success
 		} else {
 			// The check whether there is a probe which hasn't run yet.
+			//获取指定的Probe worker是否存在
 			_, exists := m.getWorker(podUID, c.Name, readiness)
 			ready = !exists
 		}
@@ -218,6 +227,7 @@ func (m *manager) UpdatePodStatus(podUID types.UID, podStatus *v1.PodStatus) {
 	}
 }
 
+//检测probe worker是否存活
 func (m *manager) getWorker(podUID types.UID, containerName string, probeType probeType) (*worker, bool) {
 	m.workerLock.RLock()
 	defer m.workerLock.RUnlock()
@@ -239,6 +249,7 @@ func (m *manager) workerCount() int {
 	return len(m.workers)
 }
 
+//等待readinessManager的探测结果
 func (m *manager) updateReadiness() {
 	update := <-m.readinessManager.Updates()
 

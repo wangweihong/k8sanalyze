@@ -1117,11 +1117,13 @@ func GetPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 
 // generateAPIPodStatus creates the final API pod status for a pod, given the
 // internal pod status.
+//将kubelet pod status转换成api pod status(包括phase, status condition, hostIP, podIP等)
 func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.PodStatus) v1.PodStatus {
 	glog.V(3).Infof("Generating status for %q", format.Pod(pod))
 
 	// check if an internal module has requested the pod is evicted.
 	// 遍历kubelet的podSyncHandler,决定是否驱逐指定的Pod
+	//被驱逐的Pod没有PodCondition?
 	for _, podSyncHandler := range kl.PodSyncHandlers {
 		if result := podSyncHandler.ShouldEvict(pod); result.Evict {
 			return v1.PodStatus{
@@ -1132,32 +1134,42 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 		}
 	}
 
+	//将kubelet pod status 转换成api pod status
 	s := kl.convertStatusToAPIStatus(pod, podStatus)
 
 	// Assume info is ready to process
 	spec := &pod.Spec
 	allStatus := append(append([]v1.ContainerStatus{}, s.ContainerStatuses...), s.InitContainerStatuses...)
+	//根据api pod中容器状态获取当前Pod所处的时期
 	s.Phase = GetPhase(spec, allStatus)
+	//确认Pod中的容器是否提供服务,并更新 api pod status各容器的Ready项
 	kl.probeManager.UpdatePodStatus(pod.UID, s)
+	//s的condition
 	s.Conditions = append(s.Conditions, status.GeneratePodInitializedCondition(spec, s.InitContainerStatuses, s.Phase))
+	//检测Pod中容器的Ready Condition.(通过readiness prober的检测)
 	s.Conditions = append(s.Conditions, status.GeneratePodReadyCondition(spec, s.ContainerStatuses, s.Phase))
 	// s (the PodStatus we are creating) will not have a PodScheduled condition yet, because converStatusToAPIStatus()
 	// does not create one. If the existing PodStatus has a PodScheduled condition, then copy it into s and make sure
 	// it is set to true. If the existing PodStatus does not have a PodScheduled condition, then create one that is set to true.
+	// 获取scheduled类型的Condition,如果存在添加新的Pod spec中
 	if _, oldPodScheduled := v1.GetPodCondition(&pod.Status, v1.PodScheduled); oldPodScheduled != nil {
 		s.Conditions = append(s.Conditions, *oldPodScheduled)
 	}
+	//api Pod Status
+	//添加新的schedule类型的condition到pod中
 	v1.UpdatePodCondition(&pod.Status, &v1.PodCondition{
 		Type:   v1.PodScheduled,
 		Status: v1.ConditionTrue,
 	})
 
+	//设置Pod的主机IP和PodIP
 	if !kl.standaloneMode {
 		hostIP, err := kl.getHostIPAnyWay()
 		if err != nil {
 			glog.V(4).Infof("Cannot get host IP: %v", err)
 		} else {
 			s.HostIP = hostIP.String()
+			// 如果和主机共用网络,设置为主机IP
 			if kubecontainer.IsHostNetworkPod(pod) && s.PodIP == "" {
 				s.PodIP = hostIP.String()
 			}
@@ -1170,6 +1182,7 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 // convertStatusToAPIStatus creates an api PodStatus for the given pod from
 // the given internal pod status.  It is purely transformative and does not
 // alter the kubelet state at all.
+//将kubelet Podstatus 转换成api Pod status
 func (kl *Kubelet) convertStatusToAPIStatus(pod *v1.Pod, podStatus *kubecontainer.PodStatus) *v1.PodStatus {
 	var apiPodStatus v1.PodStatus
 	apiPodStatus.PodIP = podStatus.IP
@@ -1196,6 +1209,7 @@ func (kl *Kubelet) convertStatusToAPIStatus(pod *v1.Pod, podStatus *kubecontaine
 // statuses into API container statuses.
 //将kubelet内部的ContaienrStatus 转换成api ContaienrStatus
 func (kl *Kubelet) convertToAPIContainerStatuses(pod *v1.Pod, podStatus *kubecontainer.PodStatus, previousStatus []v1.ContainerStatus, containers []v1.Container, hasInitContainers, isInitContainer bool) []v1.ContainerStatus {
+	//将kubelet container status转换成api container status
 	convertContainerStatus := func(cs *kubecontainer.ContainerStatus) *v1.ContainerStatus {
 		//获得容器的ID
 		cid := cs.ID.String()
@@ -1334,12 +1348,16 @@ func (kl *Kubelet) ServeLogs(w http.ResponseWriter, req *http.Request) {
 
 // findContainer finds and returns the container with the given pod ID, full name, and container name.
 // It returns nil if not found.
+//根据容器ID找到指定的
 func (kl *Kubelet) findContainer(podFullName string, podUID types.UID, containerName string) (*kubecontainer.Container, error) {
+	//获取所有的kubelet pod
 	pods, err := kl.containerRuntime.GetPods(false)
 	if err != nil {
 		return nil, err
 	}
+	//将kubelet pod ID转换成api pod ID?????为什么能通过api pod uid找到kubelet pod?两者的UID是相同的吗?
 	podUID = kl.podManager.TranslatePodUID(podUID)
+	//在kubelet pods列表通过podFullName或者podUID找到指定的kubelet pod
 	pod := kubecontainer.Pods(pods).FindPod(podFullName, podUID)
 	return pod.FindContainerByName(containerName), nil
 }

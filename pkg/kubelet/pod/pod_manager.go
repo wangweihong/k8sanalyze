@@ -83,7 +83,7 @@ type Manager interface {
 	// All public-facing functions should perform this translation for UIDs
 	// because user may provide a mirror pod UID, which is not recognized by
 	// internal Kubelet functions.
-	TranslatePodUID(uid types.UID) types.UID
+	TranslatePodUID(uid types.UID) types.UID //????这里的PodUID是api pod PID还是kubelet pod PID??
 	// GetUIDTranslations returns the mappings of static pod UIDs to mirror pod
 	// UIDs and mirror pod UIDs to static pod UIDs.
 	GetUIDTranslations() (podToMirror, mirrorToPod map[types.UID]types.UID)
@@ -112,7 +112,7 @@ type basicManager struct {
 	mirrorPodByFullName map[string]*v1.Pod
 
 	// Mirror pod UID to pod UID map.
-	translationByUID map[types.UID]types.UID
+	translationByUID map[types.UID]types.UID ///???
 
 	// A mirror pod client to create/delete mirror pods.
 	MirrorClient //用于访问apiserver创建镜像pod

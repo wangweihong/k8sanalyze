@@ -50,7 +50,7 @@ type KillPodOptions struct {
 }
 
 // UpdatePodOptions is an options struct to pass to a UpdatePod operation.
-//Pod的更新参数
+//Pod的更新参数,这是传递给Podworker的更新参数,将会转换成syncPodOptions.
 type UpdatePodOptions struct {
 	// pod to update
 	Pod *v1.Pod //要更新的Pod
@@ -76,16 +76,16 @@ type PodWorkers interface {
 }
 
 // syncPodOptions provides the arguments to a SyncPod operation.
-//pod同步选项
+//pod同步选项, pod worker将会将获取的UpdatePodOPtions转换成syncPodOptions,传递给podworkers.syncPodFn
 type syncPodOptions struct {
 	// the mirror pod for the pod to sync, if it is a static pod
 	mirrorPod *v1.Pod
 	// pod to sync
-	pod *v1.Pod
+	pod *v1.Pod //这是api pod不是kubelet pod
 	// the type of update (create, update, sync)
 	updateType kubetypes.SyncPodType
 	// the current status
-	podStatus *kubecontainer.PodStatus
+	podStatus *kubecontainer.PodStatus //从pod cache(container/cache.go)中获取的Pod的最新的状态
 	// if update type is kill, use the specified options to kill the pod.
 	killPodOptions *KillPodOptions
 }
@@ -158,6 +158,7 @@ func newPodWorkers(syncPodFn syncPodFnType, recorder record.EventRecorder, workQ
 }
 
 //接收通过channel传递过来的Pod的状态,并进行同步
+//见updatePdds
 func (p *podWorkers) managePodLoop(podUpdates <-chan UpdatePodOptions) {
 	var lastSyncTime time.Time
 	//接收podUpdates Chan中的数据,一旦podUpdates chan被发送端关闭,则退出
@@ -180,7 +181,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan UpdatePodOptions) {
 			err = p.syncPodFn(syncPodOptions{
 				mirrorPod:      update.MirrorPod,
 				pod:            update.Pod,
-				podStatus:      status,
+				podStatus:      status, //通过podCache获取pod的状态
 				killPodOptions: update.KillPodOptions,
 				updateType:     update.UpdateType,
 			})
@@ -206,6 +207,8 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan UpdatePodOptions) {
 // Apply the new setting to the specified pod.
 // If the options provide an OnCompleteFunc, the function is invoked if the update is accepted.
 // Update requests are ignored if a kill pod request is pending.
+//如果更新Pod请求相关的Pod没有启动pod worker,则启动pod worker,提交更新请求给Podworker.如果pod worker正在工作,
+//则保存请求在未处理请求队列中
 func (p *podWorkers) UpdatePod(options *UpdatePodOptions) {
 	pod := options.Pod
 	uid := pod.UID
@@ -214,7 +217,7 @@ func (p *podWorkers) UpdatePod(options *UpdatePodOptions) {
 
 	p.podLock.Lock()
 	defer p.podLock.Unlock()
-	//指定Pod的goroutine已经存在
+	//指定Pod的goroutine已经不存在,则创建pod worker
 	if podUpdates, exists = p.podUpdates[uid]; !exists {
 		// We need to have a buffer here, because checkForUpdates() method that
 		// puts an update into channel is called from the same goroutine where

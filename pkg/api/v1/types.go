@@ -1631,7 +1631,7 @@ type ContainerStatus struct {
 	//上一次终止状态
 	LastTerminationState ContainerState `json:"lastState,omitempty" protobuf:"bytes,3,opt,name=lastState"`
 	// Specifies whether the container has passed its readiness probe.
-	Ready bool `json:"ready" protobuf:"varint,4,opt,name=ready"` //Readiness探测是否通过
+	Ready bool `json:"ready" protobuf:"varint,4,opt,name=ready"` //服务就绪状态.Readiness探测是否通过,见kubelet/prober/prober_manager.go中的UpdatePodStatus()
 	// The number of times the container has been restarted, currently based on
 	// the number of dead containers that have not yet been removed.
 	// Note that this is calculated from dead containers. But those containers are subject to
@@ -1646,11 +1646,12 @@ type ContainerStatus struct {
 	// Container's ID in the format 'docker://<container_id>'.
 	// More info: http://kubernetes.io/docs/user-guide/container-environment#container-information
 	// +optional
+	//这里保存的容器ID为容器类型+真正容器ID.参考pkg/kubelet/container/runtime的ParseContainerID()
 	ContainerID string `json:"containerID,omitempty" protobuf:"bytes,8,opt,name=containerID"`
 }
 
 // PodPhase is a label for the condition of a pod at the current time.
-type PodPhase string
+type PodPhase string //见kubelet的generateAPIPodStatus对GetPhase()的调用
 
 // These are the valid statuses of pods.
 //见pkg/kubelet_pod中的GetPhase(),其中有完整计算Pod处于何种状态
@@ -1668,6 +1669,7 @@ const (
 	// PodFailed means that all containers in the pod have terminated, and at least one container has
 	// terminated in a failure (exited with a non-zero exit code or was stopped by the system).
 	PodFailed PodPhase = "Failed" //有容器处于Terminated状态而且ExitCode不为0,而且重启策略为Never,参考pkg/kubelet/kubelet_pod中的GetPhase()函数
+	//见kubelet.generateAPIPodStatus(),当pod被驱逐时,podPhase也处于PodFailed状态
 	// PodUnknown means that for some reason the state of the pod could not be obtained, typically due
 	// to an error in communicating with the host of the pod.
 	PodUnknown PodPhase = "Unknown"
@@ -1683,7 +1685,7 @@ const (
 	PodScheduled PodConditionType = "PodScheduled"
 	// PodReady means the pod is able to service requests and should be added to the
 	// load balancing pools of all matching services.
-	PodReady PodConditionType = "Ready"
+	PodReady PodConditionType = "Ready" //
 	// PodInitialized means that all init containers in the pod have started successfully.
 	PodInitialized PodConditionType = "Initialized"
 	// PodReasonUnschedulable reason in PodScheduled PodCondition means that the scheduler
@@ -1693,6 +1695,7 @@ const (
 
 // PodCondition contains details for the current condition of this pod.
 //描述Pod的状态?是记录每一次Pod的状态吗?以及探测时间吗?
+//见pkg/kubelet.go的generateAPIPodStatus调用的GeneratePodReadyCondition,如何生成Ready类型的Condition
 type PodCondition struct {
 	// Type is the type of the condition.
 	// Currently only Ready.
@@ -2116,7 +2119,7 @@ type PodSpec struct {
 	// Default to false.
 	// +k8s:conversion-gen=false
 	// +optional
-	HostNetwork bool `json:"hostNetwork,omitempty" protobuf:"varint,11,opt,name=hostNetwork"`
+	HostNetwork bool `json:"hostNetwork,omitempty" protobuf:"varint,11,opt,name=hostNetwork"` //主机命名空间,如果设置了,则PodIP为主机IP.参见generateAPIPodStatus()
 	// Use the host's pid namespace.
 	// Optional: Default to false.
 	// +k8s:conversion-gen=false
@@ -2208,6 +2211,7 @@ const (
 
 // PodStatus represents information about the status of a pod. Status may trail the actual
 // state of a system.
+//见kubelet.generateApiPodStatus()下的convertStatusToAPIStatus将kubelet pod status转换成api pod status
 type PodStatus struct {
 	// Current condition of the pod.
 	// More info: http://kubernetes.io/docs/user-guide/pod-states#pod-phase
@@ -2217,6 +2221,7 @@ type PodStatus struct {
 	// More info: http://kubernetes.io/docs/user-guide/pod-states#pod-conditions
 	// +optional
 	//??? pod的当前状态? 为什么是数组??
+	//见kubelet的generateAPIPodStatus
 	Conditions []PodCondition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,2,rep,name=conditions"`
 	// A human readable message indicating details about why the pod is in this condition.
 	// +optional
@@ -2228,7 +2233,7 @@ type PodStatus struct {
 
 	// IP address of the host to which the pod is assigned. Empty if not yet scheduled.
 	// +optional
-	HostIP string `json:"hostIP,omitempty" protobuf:"bytes,5,opt,name=hostIP"`
+	HostIP string `json:"hostIP,omitempty" protobuf:"bytes,5,opt,name=hostIP"` //通过kubelet.getHostIPAnyWay()设置,见kubelet.genrateAPIPodStatus
 	// IP address allocated to the pod. Routable at least within the cluster.
 	// Empty if not yet allocated.
 	// +optional

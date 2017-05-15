@@ -70,9 +70,9 @@ type manager struct {
 	// guards the cache
 	sync.RWMutex
 	// map of container ID -> probe Result
-	cache map[kubecontainer.ContainerID]Result
+	cache map[kubecontainer.ContainerID]Result //缓存容器和探测结果
 	// channel of updates
-	updates chan Update
+	updates chan Update //更新通道
 }
 
 var _ Manager = &manager{}
@@ -85,6 +85,7 @@ func NewManager() Manager {
 	}
 }
 
+//获得缓存中的结果
 func (m *manager) Get(id kubecontainer.ContainerID) (Result, bool) {
 	m.RLock()
 	defer m.RUnlock()
@@ -92,6 +93,7 @@ func (m *manager) Get(id kubecontainer.ContainerID) (Result, bool) {
 	return result, found
 }
 
+//更新缓存中容器的结果//?谁负责进行探测,并更新结果?
 func (m *manager) Set(id kubecontainer.ContainerID, result Result, pod *v1.Pod) {
 	if m.setInternal(id, result) {
 		m.updates <- Update{id, result, pod.UID}
@@ -99,6 +101,7 @@ func (m *manager) Set(id kubecontainer.ContainerID, result Result, pod *v1.Pod) 
 }
 
 // Internal helper for locked portion of set. Returns whether an update should be sent.
+//更新缓存中容器的结果
 func (m *manager) setInternal(id kubecontainer.ContainerID, result Result) bool {
 	m.Lock()
 	defer m.Unlock()
@@ -110,6 +113,7 @@ func (m *manager) setInternal(id kubecontainer.ContainerID, result Result) bool 
 	return false
 }
 
+//移除指定的缓存
 func (m *manager) Remove(id kubecontainer.ContainerID) {
 	m.Lock()
 	defer m.Unlock()

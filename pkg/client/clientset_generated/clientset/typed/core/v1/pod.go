@@ -33,8 +33,8 @@ type PodsGetter interface {
 // PodInterface has methods to work with Pod resources.
 type PodInterface interface {
 	Create(*v1.Pod) (*v1.Pod, error)
-	Update(*v1.Pod) (*v1.Pod, error)
-	UpdateStatus(*v1.Pod) (*v1.Pod, error)
+	Update(*v1.Pod) (*v1.Pod, error)       //更新的是PodSpec
+	UpdateStatus(*v1.Pod) (*v1.Pod, error) //更新的是Pod Status
 	Delete(name string, options *v1.DeleteOptions) error
 	DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error
 	Get(name string, options meta_v1.GetOptions) (*v1.Pod, error)

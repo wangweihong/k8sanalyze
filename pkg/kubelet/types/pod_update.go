@@ -24,7 +24,7 @@ import (
 
 const ConfigSourceAnnotationKey = "kubernetes.io/config.source"
 const ConfigMirrorAnnotationKey = "kubernetes.io/config.mirror"
-const ConfigFirstSeenAnnotationKey = "kubernetes.io/config.seen"
+const ConfigFirstSeenAnnotationKey = "kubernetes.io/config.seen" ///??这个key的作用是什么?谁设置的? kubelet.syncPod()有检测该key
 const ConfigHashAnnotationKey = "kubernetes.io/config.hash"
 
 // This key needs to sync with the key used by the rescheduler, which currently
