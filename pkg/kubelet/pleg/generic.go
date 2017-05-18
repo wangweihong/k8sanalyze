@@ -98,7 +98,7 @@ func convertState(state kubecontainer.ContainerState) plegContainerState {
 	}
 }
 
-//新旧Pod怎么划分?
+//新旧Pod怎么划分?两次relist时的pod
 type podRecord struct {
 	old     *kubecontainer.Pod //上一次relist时,kubelet上所有pod的数据
 	current *kubecontainer.Pod //这一次relist时,kubelet上所有Pod的数据
@@ -193,7 +193,7 @@ func (g *GenericPLEG) updateRelisTime(timestamp time.Time) {
 // relist queries the container runtime for list of pods/containers, compare
 // with the internal pods/containers, and generats events accordingly.
 // 获取kubelet上的Pod列表,结合记录podrecord上一次relist时pod的信息,创建pleg事件.
-// 将pod最新的状态保存在pod status cache中(如果获取pod最新状态失败,仍然缓存状态以及错误信息,将失败的Pod保存到podsToReinspect表中),并发送pleg事件到eventChannel.最后更新pod cache的全局时间栈
+// 将pod最新的状态保存在pod status cache中(如果获取pod最新状态失败,仍然缓存状态以及错误信息,将失败的Pod保存到podsToReinspect表中),并发送pleg事件到eventChannel.最后更新pod status cache的全局时间栈
 func (g *GenericPLEG) relist() {
 	glog.V(5).Infof("GenericPLEG: Relisting")
 

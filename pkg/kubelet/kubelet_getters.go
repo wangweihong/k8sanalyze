@@ -37,7 +37,7 @@ import (
 // store data.  These functions are useful to pass interfaces to other modules
 // that may need to know where to write data without getting a whole kubelet
 // instance.
-//获取kubelet存放数据的根目录
+//获取kubelet存放数据的根目录,由kubelet启动参数决定,默认为/var/lib/kubelet
 func (kl *Kubelet) getRootDir() string {
 	return kl.rootDirectory
 }

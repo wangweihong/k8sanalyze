@@ -873,7 +873,7 @@ type Kubelet struct {
 	hostname      string         //主机名通常是uname -n,但可以通过kubelet的启动参数--host-override来修改
 	nodeName      types.NodeName //kubelet提供给apiserver的节点名,通常值为hostname,见types.NodeName的定义
 	dockerClient  dockertools.DockerInterface
-	runtimeCache  kubecontainer.RuntimeCache
+	runtimeCache  kubecontainer.RuntimeCache //kubelet pod的缓存
 	kubeClient    clientset.Interface
 	iptClient     utilipt.Interface
 	rootDirectory string //这个根目录默认路径是什么?/var/lib/kubelet? 对,由kubelet的启动参数--root-dir来配置,默认就是/var/lib/kubelet
@@ -907,7 +907,7 @@ type Kubelet struct {
 	httpClient kubetypes.HttpGetter
 
 	// cAdvisor used for container information.
-	cadvisor cadvisor.Interface
+	cadvisor cadvisor.Interface //默认暴露端口是4194
 
 	// Set to true to have the node register itself with the apiserver.
 	registerNode bool //用来决定是否自动注册到api server, 由启动参数--register-node来决定;如果指定了--api-servers启动参数,默认设置了--register-node
@@ -1010,6 +1010,7 @@ type Kubelet struct {
 	//    status. Kubelet may fail to update node status reliably if the value is too small,
 	//    as it takes time to gather all necessary node information.
 	nodeStatusUpdateFrequency time.Duration // kubelet的启动参数--node-status-update-frequency设置
+	//每隔该时间,将会吧kubelet node注册到api server中
 
 	// Generates pod events.
 	pleg pleg.PodLifecycleEventGenerator //pod生命周期时间产生器
@@ -1167,6 +1168,7 @@ type Kubelet struct {
 // 1.  the root directory
 // 2.  the pods directory
 // 3.  the plugins directory
+//创建kubelet存放数据的目录
 func (kl *Kubelet) setupDataDirs() error {
 	kl.rootDirectory = path.Clean(kl.rootDirectory)
 	if err := os.MkdirAll(kl.getRootDir(), 0750); err != nil {
@@ -1186,6 +1188,7 @@ func (kl *Kubelet) setupDataDirs() error {
 func (kl *Kubelet) StartGarbageCollection() {
 	loggedContainerGCFailure := false
 	//周期性执行垃圾回收,直到接收到wait.NeverStop信号, 什么情况下会接收到这个信号
+	//不会接收到该信好,相当于死循环
 	go wait.Until(func() {
 		if err := kl.containerGC.GarbageCollect(kl.sourcesReady.AllReady()); err != nil {
 			glog.Errorf("Container garbage collection failed: %v", err)
@@ -1230,12 +1233,13 @@ func (kl *Kubelet) initializeModules() error {
 
 	// Step 2: Setup filesystem directories.
 	//默认的根目录在/var/lib/kubelet?这些目录的作用?
+	//用来存放pod/plugins等数据
 	if err := kl.setupDataDirs(); err != nil {
 		return err
 	}
 
 	// Step 3: If the container logs directory does not exist, create it.
-	//包含容器的日志
+	//创建容器的日志目录
 	if _, err := os.Stat(ContainerLogsDir); err != nil {
 		if err := kl.os.MkdirAll(ContainerLogsDir, 0755); err != nil {
 			glog.Errorf("Failed to create directory %q: %v", ContainerLogsDir, err)
@@ -1253,7 +1257,8 @@ func (kl *Kubelet) initializeModules() error {
 		return fmt.Errorf("Kubelet failed to get node info: %v", err)
 	}
 
-	//容器管理器,这和系统有关
+	//容器管理器,这和系统有关/cgroup
+	//??kubelet会启动docker daeomon?
 	if err := kl.containerManager.Start(node); err != nil {
 		return fmt.Errorf("Failed to start ContainerManager %v", err)
 	}
@@ -1273,6 +1278,7 @@ func (kl *Kubelet) initializeModules() error {
 
 // initializeRuntimeDependentModules will initialize internal modules that require the container runtime to be up.
 func (kl *Kubelet) initializeRuntimeDependentModules() {
+	//启动cadvisor进行容器统计,默认端口是4194
 	if err := kl.cadvisor.Start(); err != nil {
 		// Fail kubelet and rely on the babysitter to retry starting kubelet.
 		// TODO(random-liu): Add backoff logic in the babysitter
@@ -1307,7 +1313,9 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 		//每个指定时间注册kubelet到apiserver并更新节点状态
 		go wait.Until(kl.syncNodeStatus, kl.nodeStatusUpdateFrequency, wait.NeverStop)
 	}
+	//每30秒同步网络状态
 	go wait.Until(kl.syncNetworkStatus, 30*time.Second, wait.NeverStop)
+	//每5秒??
 	go wait.Until(kl.updateRuntimeUp, 5*time.Second, wait.NeverStop)
 
 	// Start loop to sync iptables util rules
@@ -1818,6 +1826,7 @@ func (kl *Kubelet) syncLoop(updates <-chan kubetypes.PodUpdate, handler SyncHand
 	defer syncTicker.Stop()
 	housekeepingTicker := time.NewTicker(housekeepingPeriod)
 	defer housekeepingTicker.Stop()
+	//监听Pod Lifecycle event
 	plegCh := kl.pleg.Watch()
 	for {
 		if rs := kl.runtimeState.runtimeErrors(); len(rs) != 0 {
