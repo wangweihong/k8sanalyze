@@ -26,7 +26,7 @@ type PodLifeCycleEventType string
 const (
 	ContainerStarted PodLifeCycleEventType = "ContainerStarted" //容器正在运行
 	ContainerDied    PodLifeCycleEventType = "ContainerDied"    //容器退出
-	ContainerRemoved PodLifeCycleEventType = "ContainerRemoved"
+	ContainerRemoved PodLifeCycleEventType = "ContainerRemoved" //容器被移除
 	// PodSync is used to trigger syncing of a pod when the observed change of
 	// the state of the pod cannot be captured by any single event above.
 	PodSync PodLifeCycleEventType = "PodSync"

@@ -608,11 +608,13 @@ func containerResourceRuntimeValue(fs *v1.ResourceFieldSelector, pod *v1.Pod, co
 
 // One of the following arguments must be non-nil: runningPod, status.
 // TODO: Modify containerRuntime.KillPod() to accept the right arguments.
+//清除Pod.注意参数中pod是api pod, runningPod是kubelet pod
 func (kl *Kubelet) killPod(pod *v1.Pod, runningPod *kubecontainer.Pod, status *kubecontainer.PodStatus, gracePeriodOverride *int64) error {
 	var p kubecontainer.Pod
 	if runningPod != nil {
 		p = *runningPod
 	} else if status != nil {
+		//根据podstatus的数据a创建一个kubelet pod
 		p = kubecontainer.ConvertPodStatusToRunningPod(kl.GetRuntime().Type(), status)
 	}
 
@@ -829,7 +831,9 @@ func (kl *Kubelet) HandlePodCleanups() error {
 
 // podKiller launches a goroutine to kill a pod received from the channel if
 // another goroutine isn't already in action.
+//死循环接收需要删除的Pod,放入清楚队列中,调用KillPod去同步移除
 func (kl *Kubelet) podKiller() {
+	//清除队列
 	killing := sets.NewString()
 	// guard for the killing set
 	lock := sync.Mutex{}
@@ -840,7 +844,9 @@ func (kl *Kubelet) podKiller() {
 				return
 			}
 
+			//kubelet pod
 			runningPod := podPair.RunningPod
+			//api pod
 			apiPod := podPair.APIPod
 
 			lock.Lock()

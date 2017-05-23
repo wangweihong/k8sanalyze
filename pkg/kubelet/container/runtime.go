@@ -192,6 +192,7 @@ type Pod struct {
 }
 
 // PodPair contains both runtime#Pod and api#Pod
+//包含kubelt pod与 api pod
 type PodPair struct {
 	// APIPod is the v1.Pod
 	APIPod *v1.Pod

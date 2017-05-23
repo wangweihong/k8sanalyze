@@ -35,15 +35,19 @@ import (
 //      deleted.
 // TODO(random-liu): Use more reliable cache which could collect garbage of failed pod.
 // TODO(random-liu): Move reason cache to somewhere better.
+//缓存Pod同步时启动容器失败的原因和信息
 type ReasonCache struct {
 	lock  sync.Mutex
-	cache *lru.Cache
+	cache *lru.Cache //last-recent update
+	//key只是: uuid+<容器名/网络名>
+	//value是reasonInfo
 }
 
 // reasonInfo is the cached item in ReasonCache
+//Reason Cache中缓存的数据.key值是Pod的ID,value是启动容器失败的原因和信息
 type reasonInfo struct {
-	reason  error
-	message string
+	reason  error  //失败原因
+	message string //失败信息
 }
 
 // maxReasonCacheEntries is the cache entry number in lru cache. 1000 is a proper number
@@ -55,6 +59,7 @@ func NewReasonCache() *ReasonCache {
 	return &ReasonCache{cache: lru.New(maxReasonCacheEntries)}
 }
 
+//这个name是kubecontainer.PodSyncResult的对象名(容器名或者网络名(目前似乎不支持))
 func (c *ReasonCache) composeKey(uid types.UID, name string) string {
 	return fmt.Sprintf("%s_%s", uid, name)
 }
@@ -68,11 +73,13 @@ func (c *ReasonCache) add(uid types.UID, name string, reason error, message stri
 
 // Update updates the reason cache with the SyncPodResult. Only SyncResult with
 // StartContainer action will change the cache.
+//获取启动容器动作的同步结果,如果表明同步出错,则添加对应信息到原因缓存中
 func (c *ReasonCache) Update(uid types.UID, result kubecontainer.PodSyncResult) {
 	for _, r := range result.SyncResults {
 		if r.Action != kubecontainer.StartContainer {
 			continue
 		}
+		//获得同步结果相关的对象
 		name := r.Target.(string)
 		if r.Error != nil {
 			c.add(uid, name, r.Error, r.Message)
@@ -83,6 +90,7 @@ func (c *ReasonCache) Update(uid types.UID, result kubecontainer.PodSyncResult) 
 }
 
 // Remove removes error reason from the cache
+//移除指定的对象的失败原因缓存
 func (c *ReasonCache) Remove(uid types.UID, name string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -92,6 +100,7 @@ func (c *ReasonCache) Remove(uid types.UID, name string) {
 // Get gets error reason from the cache. The return values are error reason, error message and
 // whether an error reason is found in the cache. If no error reason is found, empty string will
 // be returned for error reason and error message.
+//获取指定的容器失败原因缓存
 func (c *ReasonCache) Get(uid types.UID, name string) (error, string, bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()

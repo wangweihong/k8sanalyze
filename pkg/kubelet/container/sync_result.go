@@ -54,7 +54,7 @@ var (
 type SyncAction string
 
 const (
-	StartContainer   SyncAction = "StartContainer"
+	StartContainer   SyncAction = "StartContainer" //动作为启动容器
 	KillContainer    SyncAction = "KillContainer"
 	SetupNetwork     SyncAction = "SetupNetwork"
 	TeardownNetwork  SyncAction = "TeardownNetwork"
@@ -67,15 +67,15 @@ const (
 // SyncResult is the result of sync action.
 type SyncResult struct {
 	// The associated action of the result
-	Action SyncAction
+	Action SyncAction //哪种类型动作的同步
 	// The target of the action, now the target can only be:
 	//  * Container: Target should be container name
 	//  * Network: Target is useless now, we just set it as pod full name now
-	Target interface{}
+	Target interface{} //动作操作的对象
 	// Brief error reason
-	Error error
+	Error error //同步失败的错误原因
 	// Human readable error reason
-	Message string
+	Message string //同步失败的错误信息
 }
 
 // NewSyncResult generates new SyncResult with specific Action and Target

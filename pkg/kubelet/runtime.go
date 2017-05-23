@@ -22,13 +22,15 @@ import (
 	"time"
 )
 
+//运行时状态列表?
+//Kubelet运行时将会启动不同的goroutine,每隔几秒会更新这里的cidr地址,遇到网络错误则记录
 type runtimeState struct {
 	sync.RWMutex
-	lastBaseRuntimeSync      time.Time
+	lastBaseRuntimeSync      time.Time //由updateRuntimeUp()进行更新
 	baseRuntimeSyncThreshold time.Duration
-	networkError             error //
-	internalError            error
-	cidr                     string //
+	networkError             error  //网络错误,当没有网络错误时,则为nil;goroutine会周期调用updateRuntimeUp()或者syncNetworkStatus来更新该项.syncPod()将会根据该项决定是否同步pod
+	internalError            error  //内部错误
+	cidr                     string //cidr地址,在创建runtimeState就调用updatePodCIDR()进行更新,而不会停止的gotouine会调用syncNetworkStatus周期性调用updatePodCIDR()来更新.
 	initError                error
 }
 
@@ -44,12 +46,14 @@ func (s *runtimeState) setInternalError(err error) {
 	s.internalError = err
 }
 
+//更新网络错误,在kubelet.go中由updateRuntimeUp()或者syncNetworkStatus函数设置
 func (s *runtimeState) setNetworkState(err error) {
 	s.Lock()
 	defer s.Unlock()
 	s.networkError = err
 }
 
+//设置cidr地址
 func (s *runtimeState) setPodCIDR(cidr string) {
 	s.Lock()
 	defer s.Unlock()
@@ -68,6 +72,7 @@ func (s *runtimeState) setInitError(err error) {
 	s.initError = err
 }
 
+//获取所有的运行时错误
 func (s *runtimeState) runtimeErrors() []string {
 	s.RLock()
 	defer s.RUnlock()
