@@ -36,7 +36,7 @@ type Manager interface {
 	// Updates creates a channel that receives an Update whenever its result changes (but not
 	// removed).
 	// NOTE: The current implementation only supports a single updates channel.
-	Updates() <-chan Update
+	Updates() <-chan Update //syncLoopInteration()将更加该channel的liveness探测结果是否成功,决定是否进行更新
 }
 
 // Result is the type for probe results.

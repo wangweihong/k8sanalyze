@@ -152,13 +152,14 @@ const (
 )
 
 // SyncHandler is an interface implemented by Kubelet, for testability
+//只被kkubelet实现
 type SyncHandler interface {
 	HandlePodAdditions(pods []*v1.Pod)
 	HandlePodUpdates(pods []*v1.Pod)
 	HandlePodRemoves(pods []*v1.Pod)
 	HandlePodReconcile(pods []*v1.Pod)
 	HandlePodSyncs(pods []*v1.Pod)
-	HandlePodCleanups() error
+	HandlePodCleanups() error //kubelet_pod.go中实现
 }
 
 // Option is a functional option type for Kubelet
@@ -178,7 +179,7 @@ type KubeletBootstrap interface {
 }
 
 // create and initialize a Kubelet instance
-//返回一个Interface??这个函数是构建了kubelet对象,kubelet对象实现了这个接口
+//返回一个Interface??这个函数是构建了kubelet对象,kubelet对象实现了这个KubeletBootstrap接口
 type KubeletBuilder func(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *KubeletDeps, standaloneMode bool) (KubeletBootstrap, error)
 
 // KubeletDeps is a bin for things we might consider "injected注入的 dependencies" -- objects constructed
@@ -221,7 +222,7 @@ type KubeletDeps struct {
 	NetworkPlugins []network.NetworkPlugin
 	OOMAdjuster    *oom.OOMAdjuster
 	OSInterface    kubecontainer.OSInterface
-	PodConfig      *config.PodConfig
+	PodConfig      *config.PodConfig    //这个和pod的删除/创建的请求有关,这是在哪里初始化的?unsecureKubeletDeps并没有创建该项
 	Recorder       record.EventRecorder ///事件记录器
 	Writer         kubeio.Writer
 	VolumePlugins  []volume.VolumePlugin
@@ -231,6 +232,7 @@ type KubeletDeps struct {
 // makePodSourceConfig creates a config.PodConfig from the given
 // KubeletConfiguration or returns an error.
 //这个Pod配置做什么用的?
+//用于创建static pod使用,static pod 创建源
 func makePodSourceConfig(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *KubeletDeps, nodeName types.NodeName) (*config.PodConfig, error) {
 	manifestURLHeader := make(http.Header)
 	if kubeCfg.ManifestURLHeader != "" {
@@ -245,12 +247,14 @@ func makePodSourceConfig(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps
 	cfg := config.NewPodConfig(config.PodConfigNotificationIncremental, kubeDeps.Recorder)
 
 	// define file config source
+	//static pod的config file创建源
 	if kubeCfg.PodManifestPath != "" {
 		glog.Infof("Adding manifest file: %v", kubeCfg.PodManifestPath)
 		config.NewSourceFile(kubeCfg.PodManifestPath, nodeName, kubeCfg.FileCheckFrequency.Duration, cfg.Channel(kubetypes.FileSource))
 	}
 
 	// define url config source
+	//static Pod的pod的http创建源
 	if kubeCfg.ManifestURL != "" {
 		glog.Infof("Adding manifest url %q with HTTP header %v", kubeCfg.ManifestURL, manifestURLHeader)
 		config.NewSourceURL(kubeCfg.ManifestURL, manifestURLHeader, nodeName, kubeCfg.HTTPCheckFrequency.Duration, cfg.Channel(kubetypes.HTTPSource))
@@ -327,7 +331,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 		// TODO: remove this when we've refactored kubelet to only use clientset.
 	}
 
-	//??这个PodConfig有什么作用?
+	//??这个PodConfig有什么作用? static pod创建源
 	if kubeDeps.PodConfig == nil {
 		var err error
 		kubeDeps.PodConfig, err = makePodSourceConfig(kubeCfg, kubeDeps, nodeName)
@@ -688,6 +692,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 			)
 			klet.containerRuntime = runtime
 			klet.runner = kubecontainer.DirectStreamingRunner(runtime)
+			unner(runtime)
 		case "rkt":
 			// TODO: Include hairpin mode settings in rkt?
 			conf := &rkt.Config{
@@ -1085,6 +1090,7 @@ type Kubelet struct {
 	// A queue used to trigger pod workers.
 	workQueue queue.WorkQueue ///????和pkg/kubelet/pod_worker.go有关
 	//每次对Pod进行更新请求时,都会将该Pod加入该队列中.如果已存在,就更新出栈时间
+	//见kubelet.getPodsToSync(),该队列包含需要更新的pods
 
 	// oneTimeInitializer is used to initialize modules that are dependent on the runtime to be up.
 	oneTimeInitializer sync.Once
@@ -1492,12 +1498,10 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	// The pod IP may be changed in generateAPIPodStatus if the pod is using host network. (See #24576)
 	// TODO(random-liu): After writing pod spec into container labels, check whether pod is using host network, and
 	// set pod IP to hostIP directly in runtime.GetPodStatus
-	//???所以pod的Ip是由apiserver通过其他最近获取后设置?
 	podStatus.IP = apiPodStatus.PodIP
 
 	// Record the time it takes for the pod to become running.
-	///??????
-	//检测kubelet是否已存在对应的kubelet pod
+	//获取api pod哦哦
 	existingStatus, ok := kl.statusManager.GetPodStatus(pod.UID)
 	if !ok || existingStatus.Phase == v1.PodPending && apiPodStatus.Phase == v1.PodRunning &&
 		!firstSeenTime.IsZero() {
@@ -1673,16 +1677,19 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 // Get pods which should be resynchronized. Currently, the following pod should be resynchronized:
 //   * pod whose work is ready.
 //   * internal modules that request sync of a pod.
-//获取Kubelet上需要同步的Pod
+//获取Kubelet上需要同步的Pod,kubelet在syncLoopInteration()中将通过一个定时器周期性的同步Pod
+//需要同步的Pod包括:1)在kubelet上的workQueue上的所有Pod,2)经过podSyncLoopHandlers检测需要同步的pod
 func (kl *Kubelet) getPodsToSync() []*v1.Pod {
 	//获取kubelet上所有的Pod
 	allPods := kl.podManager.GetPods()
+	//kubelet工作队列等待的pod
 	podUIDs := kl.workQueue.GetWork()
 	podUIDSet := sets.NewString()
 	for _, podUID := range podUIDs {
 		podUIDSet.Insert(string(podUID))
 	}
 	var podsToSync []*v1.Pod
+	//获得pod需要被syncloopHandler同步的pod以及workqueue中等待的pods
 	for _, pod := range allPods {
 		if podUIDSet.Has(string(pod.UID)) {
 			// The work of the pod is ready
@@ -1835,6 +1842,8 @@ func (kl *Kubelet) canRunPod(pod *v1.Pod) lifecycle.PodAdmitResult {
 // no changes are seen to the configuration, will synchronize the last known desired
 // state every sync-frequency seconds. Never returns.
 ///这个SYncHandler就是kubelet本身
+//updatesChan是Pod配置的来源(apiserver,file,http),
+//当有Pod添加移除,更新时,将会向该Chan发送pod事件
 func (kl *Kubelet) syncLoop(updates <-chan kubetypes.PodUpdate, handler SyncHandler) {
 	glog.Info("Starting kubelet main sync loop.")
 	// The resyncTicker wakes up kubelet to checks if there are any pod workers
@@ -1846,6 +1855,7 @@ func (kl *Kubelet) syncLoop(updates <-chan kubetypes.PodUpdate, handler SyncHand
 	defer housekeepingTicker.Stop()
 	//监听Pod Lifecycle event,接收
 	plegCh := kl.pleg.Watch()
+	//如果kubelet没有出现运行时错误,则进行Pod的同步
 	for {
 		//获取Kubelet运行时所有错误(网络错误和内部错误)
 		if rs := kl.runtimeState.runtimeErrors(); len(rs) != 0 {
@@ -1853,6 +1863,7 @@ func (kl *Kubelet) syncLoop(updates <-chan kubetypes.PodUpdate, handler SyncHand
 			time.Sleep(5 * time.Second)
 			continue
 		}
+		//
 		if !kl.syncLoopIteration(updates, handler, syncTicker.C, housekeepingTicker.C, plegCh) {
 			break
 		}
@@ -1891,10 +1902,14 @@ func (kl *Kubelet) syncLoop(updates <-chan kubetypes.PodUpdate, handler SyncHand
 // * houseKeepingCh: trigger cleanup of pods
 // * liveness manager: sync pods that have failed or in which one or more
 //                     containers have failed liveness checks
+//syncCh,housekeepingCh都是time ticker channel,每隔指定之间(10秒)将会发送信号
+//configCh是pod的配置来源,包含apiserver,file,http几个来源
 func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handler SyncHandler,
 	syncCh <-chan time.Time, housekeepingCh <-chan time.Time, plegCh <-chan *pleg.PodLifecycleEvent) bool {
 	kl.syncLoopMonitor.Store(kl.clock.Now())
 	select {
+	//接收到了pod 源的事件(file,http,apiserver)
+	//file,http是一定周期去轮询,而apiserver是使用了list-watch
 	case u, open := <-configCh:
 		// Update from a config source; dispatch it to the right handler
 		// callback.
@@ -1924,7 +1939,8 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 			glog.V(2).Infof("SyncLoop (DELETE, %q): %q", u.Source, format.Pods(u.Pods))
 			// DELETE is treated as a UPDATE because of graceful deletion.
 			handler.HandlePodUpdates(u.Pods)
-		case kubetypes.SET:
+			//这个kubetypes.SET是用来创建pod源的,不应该出现在这里
+		case kubetypes.SET: //?? apiserver源设置的动作?见pkg/kubelet/config/apiserver.go
 			// TODO: Do we want to support this?
 			glog.Errorf("Kubelet does not support snapshot update")
 		}
@@ -1934,10 +1950,12 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 		// routines will start reclaiming resources. It is important that this
 		// takes place only after kubelet calls the update handler to process
 		// the update to ensure the internal pod cache is up-to-date.
+		//记录该pod来源,已经记录过也无所谓
 		kl.sourcesReady.AddSource(u.Source)
 
 		// 获取pleg事件
 	case e := <-plegCh:
+		//如果不是容器被移除?(因为容器被移除,pod会重建??)
 		if isSyncPodWorthy(e) {
 			// PLEG event for a pod; sync it.
 			if pod, ok := kl.podManager.GetPodByUID(e.ID); ok {
@@ -1950,19 +1968,25 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 			}
 		}
 
+		//容器处于exited状态
 		if e.Type == pleg.ContainerDied {
 			if containerID, ok := e.Data.(string); ok {
+				//找到指定Pod中已退出的容器,如果pod被驱逐了,则直接删除该容器,否则添加该容器到待删除列表.
 				kl.cleanUpContainersInPod(e.ID, containerID)
 			}
 		}
+		//获取需要同步的pods,进行同步
 	case <-syncCh:
 		// Sync pods waiting for sync
+		//获取需要同步的pod,进行同步
 		podsToSync := kl.getPodsToSync()
 		if len(podsToSync) == 0 {
 			break
 		}
 		glog.V(4).Infof("SyncLoop (SYNC): %d pods; %s", len(podsToSync), format.Pods(podsToSync))
 		kl.HandlePodSyncs(podsToSync)
+
+		//如果liveness检测失败了,同步指定的Pod
 	case update := <-kl.livenessManager.Updates():
 		if update.Result == proberesults.Failure {
 			// The liveness manager detected a failure; sync the pod.
@@ -1996,6 +2020,8 @@ func (kl *Kubelet) syncLoopIteration(configCh <-chan kubetypes.PodUpdate, handle
 
 // dispatchWork starts the asynchronous sync of the pod in a pod worker.
 // If the pod is terminated, dispatchWork
+//调度Pod工作?
+//被handleMirrorPod(),HandlePodAddtion(),HandlePodUpdate(),HandlerPodSync()
 func (kl *Kubelet) dispatchWork(pod *v1.Pod, syncType kubetypes.SyncPodType, mirrorPod *v1.Pod, start time.Time) {
 	if kl.podIsTerminated(pod) {
 		if pod.DeletionTimestamp != nil {
@@ -2003,6 +2029,7 @@ func (kl *Kubelet) dispatchWork(pod *v1.Pod, syncType kubetypes.SyncPodType, mir
 			// handle the work item. Check if the DeletionTimestamp has been
 			// set, and force a status update to trigger a pod deletion request
 			// to the apiserver.
+			//更新Pod中容器的状态为Terminated
 			kl.statusManager.TerminatePod(pod)
 		}
 		return
@@ -2243,6 +2270,7 @@ func (kl *Kubelet) GetConfiguration() componentconfig.KubeletConfiguration {
 }
 
 // BirthCry sends an event that the kubelet has started up.
+//记录kubelet的事件
 func (kl *Kubelet) BirthCry() {
 	// Make an event that kubelet restarted.
 	kl.recorder.Eventf(kl.nodeRef, v1.EventTypeNormal, events.StartingKubelet, "Starting kubelet.")
@@ -2269,14 +2297,17 @@ func (kl *Kubelet) ListenAndServeReadOnly(address net.IP, port uint) {
 }
 
 // Delete the eligible dead container instances in a pod. Depending on the configuration, the latest dead containers may be kept around.
-//如果exitedCOntainerId处于退出状态,则从容器管理器中移除.
+//找到指定Pod中已退出的容器,如果pod被驱逐了,则直接删除该容器,否则添加该容器到待删除列表.
 func (kl *Kubelet) cleanUpContainersInPod(podId types.UID, exitedContainerID string) {
+	//获取Pod的状态,如果pod被驱逐,
 	if podStatus, err := kl.podCache.Get(podId); err == nil {
 		removeAll := false
 		if syncedPod, ok := kl.podManager.GetPodByUID(podId); ok {
 			// When an evicted pod has already synced, all containers can be removed.
+			//如果pod是由于被驱逐导致移除的
 			removeAll = eviction.PodIsEvicted(syncedPod.Status)
 		}
+		//
 		kl.containerDeletor.deleteContainersInPod(exitedContainerID, podStatus, removeAll)
 	}
 }

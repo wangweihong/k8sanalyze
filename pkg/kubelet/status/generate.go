@@ -53,10 +53,11 @@ func GeneratePodReadyCondition(spec *v1.PodSpec, containerStatuses []v1.Containe
 
 	// If all containers are known and succeeded, just return PodCompleted.
 	//如果容器处于已成功阶段且不存在未知的容器
+	//即Pod中的容器自动停止
 	if podPhase == v1.PodSucceeded && len(unknownContainers) == 0 {
 		return v1.PodCondition{
 			Type:   v1.PodReady,
-			Status: v1.ConditionFalse, ///???为什么返回这个? 因为这里查询的Ready Condition,即服务就绪状态.容器已完成,就无法提供服务
+			Status: v1.ConditionFalse, ///???为什么返回这个? 因为这里查询的Ready Condition,即服务就绪状态.Pod处于已完成(容器处于Terminated状态),就无法提供服务
 			Reason: "PodCompleted",
 		}
 	}
@@ -86,7 +87,8 @@ func GeneratePodReadyCondition(spec *v1.PodSpec, containerStatuses []v1.Containe
 
 // GeneratePodInitializedCondition returns initialized condition if all init containers in a pod are ready, else it
 // returns an uninitialized condition.
-//生成pod init容器的状态
+//生成pod init容器的状态中的Initialized Condition
+//但注意https://kubernetes.io/docs/concepts/workloads/pods/init-containers/提到.Init Containers do not support readiness probes because they must run to completion before the Pod can be ready.
 func GeneratePodInitializedCondition(spec *v1.PodSpec, containerStatuses []v1.ContainerStatus, podPhase v1.PodPhase) v1.PodCondition {
 	// Find if all containers are ready or not.
 	if containerStatuses == nil && len(spec.InitContainers) > 0 {
@@ -109,6 +111,7 @@ func GeneratePodInitializedCondition(spec *v1.PodSpec, containerStatuses []v1.Co
 	}
 
 	// If all init containers are known and succeeded, just return PodCompleted.
+	//如果Pod处于Sucess状态(已终止),
 	if podPhase == v1.PodSucceeded && len(unknownContainers) == 0 {
 		return v1.PodCondition{
 			Type:   v1.PodInitialized,

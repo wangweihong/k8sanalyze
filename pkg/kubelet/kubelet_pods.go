@@ -774,6 +774,7 @@ func (kl *Kubelet) HandlePodCleanups() error {
 	}
 	// Stop the workers for no-longer existing pods.
 	// TODO: is here the best place to forget pod workers?
+	//关闭指定pod的pod workers
 	kl.podWorkers.ForgetNonExistingPodWorkers(desiredPods)
 	kl.probeManager.CleanupPods(activePods)
 
@@ -873,6 +874,7 @@ func (kl *Kubelet) podKiller() {
 }
 
 // checkHostPortConflicts detects pods with conflicted host ports.
+//检测各个Pod中容器主机端口项是否冲突冲突
 func hasHostPortConflicts(pods []*v1.Pod) bool {
 	ports := sets.String{}
 	for _, pod := range pods {
@@ -1008,6 +1010,7 @@ func (kl *Kubelet) GetKubeletContainerLogs(podFullName, containerName string, lo
 // GetPhase returns the phase of a pod given its container info.
 // This func is exported to simplify integration with 3rd party kubelet
 // integrations like kubernetes-mesos.
+//根据pod的状态获取当前pod处于什么阶段
 func GetPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 	initialized := 0
 	pendingInitialization := 0

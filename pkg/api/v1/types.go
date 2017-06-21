@@ -1126,7 +1126,7 @@ type ContainerPort struct {
 	// If HostNetwork is specified, this must match ContainerPort.
 	// Most containers do not need this.
 	// +optional
-	HostPort int32 `json:"hostPort,omitempty" protobuf:"varint,2,opt,name=hostPort"`
+	HostPort int32 `json:"hostPort,omitempty" protobuf:"varint,2,opt,name=hostPort"` //??这个HostPort的作用是什么?和Service的Port有什么关联?
 	// Number of port to expose on the pod's IP address.
 	// This must be a valid port number, 0 < x < 65536.
 	ContainerPort int32 `json:"containerPort" protobuf:"varint,3,opt,name=containerPort"`
@@ -1602,6 +1602,7 @@ type ContainerStateTerminated struct {
 // ContainerState holds a possible state of container.
 // Only one of its members may be specified.
 // If none of them is specified, the default one is ContainerStateWaiting.
+//容器处于哪个状态, 则哪个状态的字段不为nil
 type ContainerState struct {
 	// Details about a waiting container
 	// +optional
@@ -1616,6 +1617,7 @@ type ContainerState struct {
 
 // ContainerStatus contains details for the current status of this container.
 //描述容器的当前状态
+//如何更新则参见pkg/kubelet/status/status_manager.go的syncPod()
 type ContainerStatus struct {
 	// This must be a DNS_LABEL. Each container in a pod must have a unique name.
 	// Cannot be updated.
@@ -1632,6 +1634,7 @@ type ContainerStatus struct {
 	LastTerminationState ContainerState `json:"lastState,omitempty" protobuf:"bytes,3,opt,name=lastState"`
 	// Specifies whether the container has passed its readiness probe.
 	Ready bool `json:"ready" protobuf:"varint,4,opt,name=ready"` //服务就绪状态.Readiness探测是否通过,见kubelet/prober/prober_manager.go中的UpdatePodStatus()
+	//设置见pkg/kubelet/status/status_manager.go的SetContainerReadiness()
 	// The number of times the container has been restarted, currently based on
 	// the number of dead containers that have not yet been removed.
 	// Note that this is calculated from dead containers. But those containers are subject to
@@ -1646,7 +1649,7 @@ type ContainerStatus struct {
 	// Container's ID in the format 'docker://<container_id>'.
 	// More info: http://kubernetes.io/docs/user-guide/container-environment#container-information
 	// +optional
-	//这里保存的容器ID为容器类型+真正容器ID.参考pkg/kubelet/container/runtime的ParseContainerID()
+	//这里保存的容器ID为容器类型(docker)+真正容器ID.参考pkg/kubelet/container/runtime的ParseContainerID()
 	ContainerID string `json:"containerID,omitempty" protobuf:"bytes,8,opt,name=containerID"`
 }
 
@@ -1663,6 +1666,7 @@ const (
 	// PodRunning means the pod has been bound to a node and all of the containers have been started.
 	// At least one container is still running or is in the process of being restarted.
 	PodRunning PodPhase = "Running"
+	//注意:PodPhase不能精确的描述pod的当前状态. 一旦Pod成功创建且只要一个容器处于运行状态,Pod都处于Running状态,哪怕其他容器一直在不停地重启
 	// PodSucceeded means that all containers in the pod have voluntarily terminated
 	// with a container exit code of 0, and the system is not going to restart any of these containers.
 	PodSucceeded PodPhase = "Succeeded" //pod中的容器自动停止,kubelet认为该Pod处于Terminated状态,见pkg/kubelet/kubelet_pod中podIsTerminated
@@ -1677,6 +1681,7 @@ const (
 
 // PodConditionType is a valid value for PodCondition.Type
 //这个和podPhase使用的场景?什么情况下需要检测这个??
+//如InitContainer有没有准备好,Pod中容器有没有通过readiness检查
 type PodConditionType string
 
 // These are valid conditions of pod.
@@ -1685,9 +1690,9 @@ const (
 	PodScheduled PodConditionType = "PodScheduled"
 	// PodReady means the pod is able to service requests and should be added to the
 	// load balancing pools of all matching services.
-	PodReady PodConditionType = "Ready" //
+	PodReady PodConditionType = "Ready" //Pod已经正常启动,能够提供服务,如何产生,见pkg/kubelet/status/generate.go的GeneratePodReadyCondition()
 	// PodInitialized means that all init containers in the pod have started successfully.
-	PodInitialized PodConditionType = "Initialized"
+	PodInitialized PodConditionType = "Initialized" //当Pod处于PodSuccessed Phase或者Pod的所有Init容器的ready为true.见pkg/kubelet/status/generate.go的GeneratePodInitializedCondition()
 	// PodReasonUnschedulable reason in PodScheduled PodCondition means that the scheduler
 	// can't schedule the pod right now, for example due to insufficient resources in the cluster.
 	PodReasonUnschedulable = "Unschedulable"

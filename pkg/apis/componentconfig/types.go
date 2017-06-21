@@ -119,6 +119,7 @@ const (
 )
 
 // TODO: curate the ordering and structure of this config object
+// 对应Kubelet二进制程序的每一项
 type KubeletConfiguration struct {
 	metav1.TypeMeta
 

@@ -952,7 +952,7 @@ func buildResourceToRankFunc(withImageFs bool) map[v1.ResourceName]rankFunc {
 }
 
 // PodIsEvicted returns true if the reported pod status is due to an eviction.
-//根据Pod状态中的原因为"Evicted"来判定一个Pod是否
+//根据Pod状态中的原因为"Evicted"来判定一个Pod是否被驱逐
 func PodIsEvicted(podStatus v1.PodStatus) bool {
 	return podStatus.Phase == v1.PodFailed && podStatus.Reason == reason
 }

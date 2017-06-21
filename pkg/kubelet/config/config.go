@@ -56,13 +56,15 @@ const (
 // PodConfig is a configuration mux that merges many sources of pod configuration into a single
 // consistent structure, and then delivers incremental change notifications to listeners
 // in order.
-//统一所有Pod的配置?
+//用于static pod创建源
 type PodConfig struct {
 	pods *podStorage
 	mux  *config.Mux
 
 	// the channel of denormalized changes passed to listeners
-	updates chan kubetypes.PodUpdate
+	updates chan kubetypes.PodUpdate //???kubelet会监听这个chan,来对pod进行删除移除等操作.
+	//当启用了http/dir manifest来创建static pod,将会启动goroutine监听相应路径的pod配置的变化
+	//然后通过这个channel传递信息给kubelet,要求其对static pod进行创建/更新/删除等
 
 	// contains the list of all configured sources
 	sourcesLock sync.Mutex
@@ -220,6 +222,7 @@ func (s *podStorage) merge(source string, change interface{}) (adds, updates, de
 	removePods := []*v1.Pod{}
 	reconcilePods := []*v1.Pod{}
 
+	//获取指定源上的所有Pod
 	pods := s.pods[source]
 	if pods == nil {
 		pods = make(map[string]*v1.Pod)
@@ -278,6 +281,7 @@ func (s *podStorage) merge(source string, change interface{}) (adds, updates, de
 		}
 		updatePodsFunc(update.Pods, pods, pods)
 
+		///
 	case kubetypes.REMOVE:
 		glog.V(4).Infof("Removing pods from source %s : %v", source, update.Pods)
 		for _, value := range update.Pods {
@@ -291,6 +295,7 @@ func (s *podStorage) merge(source string, change interface{}) (adds, updates, de
 			// this is a no-op
 		}
 
+		//创建新的pod源
 	case kubetypes.SET:
 		glog.V(4).Infof("Setting pods for source %s", source)
 		s.markSourceSet(source)
@@ -321,18 +326,21 @@ func (s *podStorage) merge(source string, change interface{}) (adds, updates, de
 	return adds, updates, deletes, removes, reconciles
 }
 
+//新增新的pod源
 func (s *podStorage) markSourceSet(source string) {
 	s.sourcesSeenLock.Lock()
 	defer s.sourcesSeenLock.Unlock()
 	s.sourcesSeen.Insert(source)
 }
 
+//是否包含指定的源组
 func (s *podStorage) seenSources(sources ...string) bool {
 	s.sourcesSeenLock.RLock()
 	defer s.sourcesSeenLock.RUnlock()
 	return s.sourcesSeen.HasAll(sources...)
 }
 
+//检测pod源中无效的Pod
 func filterInvalidPods(pods []*v1.Pod, source string, recorder record.EventRecorder) (filtered []*v1.Pod) {
 	names := sets.String{}
 	for i, pod := range pods {

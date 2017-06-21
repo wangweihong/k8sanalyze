@@ -40,10 +40,16 @@ import (
 
 // A wrapper around v1.PodStatus that includes a version to enforce that stale pod statuses are
 // not sent to the API server.
+//缓存的是api pod的状态
+//为什么要缓存?猜想,因为所有的更新pod状态请求都是发送给manager.podStatusChannel,交由syncPod()去处理
+//当同时由多个针对于某个pod的请求时,每次只有一个pod能被处理.因为状态更新请求都是有时间性的,
+//这样就必须有一个方式,能够知道最新的状态更新请求.就可以知道哪些更新请求可以被忽略(因为已经过期了)
 type versionedPodStatus struct {
 	status v1.PodStatus //pod的状态
 	// Monotonically increasing version number (per pod).
 	version uint64 //pod的版本号,通过和manager.apiStatusVersions比较,就可以知道缓存的状态是否是最新的
+	//这个可以理解为向syncPod()发起的pod的更新请求的版本号.
+	//新的状态会在老的状态上加1.见SetPodStatus()
 	// Pod name & namespace, for sending updates to API server.
 	podName      string
 	podNamespace string
@@ -62,12 +68,19 @@ type manager struct {
 	kubeClient clientset.Interface // 访问api server的client,创建manager时必须配置,否则statusManager无法正常启动
 	podManager kubepod.Manager     //kubelet的pod管理器
 	// Map from pod UID to sync status of the corresponding pod.
-	podStatuses      map[types.UID]versionedPodStatus //pod的状态缓存列表?
+	podStatuses map[types.UID]versionedPodStatus //pod状态的缓存列表,缓存的是pod的最新状态更新请求的版本号.
+	//这个版本号只是记录最新的状态请求是哪个.新的请求会覆盖旧的.(因为旧的请求已经提交syncPod()等待处理,所以并不影响).
+	//生成见updateStatusInternal()
+	//syncBatch()将会根据这里缓存的版本号和apiStatusVersion做对比,发起更新请求
 	podStatusesLock  sync.RWMutex
 	podStatusChannel chan podStatusSyncRequest //发送请求给管理器来同步指定pod的状态到apiserver中
+	//见Manager.SetPodStatus在对新的状态进行处理后将会发送该Channel中
+	//Manager.Start()执行后,会起一个goroutine,无限等待该Channel上的值
 	// Map from (mirror) pod UID to latest status version successfully sent to the API server.
 	// apiStatusVersions must only be accessed from the sync thread.
-	apiStatusVersions map[types.UID]uint64 //用于存放pod的最新版本号
+	apiStatusVersions map[types.UID]uint64 //见syncPod(),用于缓存最新的同步到apiserver中Pod状态的版本..也就是最新一次syncPod()处理的pod状态更新请求中的版本号.
+	//通过查询这个表,就可以知道pod同步的最新版本号.syncPod()就可以根据这个版本判定pod的某个状态更新请求是否过期.
+	//见为什么要换存状态的猜想
 }
 
 // PodStatusProvider knows how to provide status for a pod.  It's intended to be used by other components
@@ -88,15 +101,17 @@ type Manager interface {
 	Start()
 
 	// SetPodStatus caches updates the cached status for the given pod, and triggers a status update.
-	SetPodStatus(pod *v1.Pod, status v1.PodStatus)
+	//更新指定的api pod的pod status
+	SetPodStatus(pod *v1.Pod, status v1.PodStatus) //只被kubelet的syncPod,rejectPod调用,status为Pod新的状态
 
 	// SetContainerReadiness updates the cached container status with the given readiness, and
 	// triggers a status update.
-	SetContainerReadiness(podUID types.UID, containerID kubecontainer.ContainerID, ready bool)
+	SetContainerReadiness(podUID types.UID, containerID kubecontainer.ContainerID, ready bool) //被pkg/kubelet/prober/prober_manager.go UpdateReadiness调用
 
 	// TerminatePod resets the container status for the provided pod to terminated and triggers
 	// a status update.
-	TerminatePod(pod *v1.Pod)
+	TerminatePod(pod *v1.Pod) //设置pod中所有容器的状态中的Terminated,然后更新
+	//只被kubelet的dispatchWork()调用
 
 	// RemoveOrphanedStatuses scans the status cache and removes any entries for pods not included in
 	// the provided podUIDs.
@@ -143,10 +158,11 @@ func (m *manager) Start() {
 		select {
 		//如果接收到同步请求,
 		case syncRequest := <-m.podStatusChannel:
+			//更新api server中指定的Pod的状态
 			m.syncPod(syncRequest.podUID, syncRequest.status)
 			//如果10秒超时
 		case <-syncTicker:
-			m.syncBatch()
+			m.syncBatch() //遍历所有缓存的pod状态,找到需要更新到apiserver中pod的状态,更新到apiserver中
 		}
 	}, 0)
 }
@@ -159,11 +175,12 @@ func (m *manager) GetPodStatus(uid types.UID) (v1.PodStatus, bool) {
 	return status.status, ok
 }
 
+//更新apiserver中指定Pod的状态
 func (m *manager) SetPodStatus(pod *v1.Pod, status v1.PodStatus) {
 	m.podStatusesLock.Lock()
 	defer m.podStatusesLock.Unlock()
 	// Make sure we're caching a deep copy.
-	//拷贝指定Pod的状态
+	//拷贝新的状态
 	status, err := copyStatus(&status)
 	if err != nil {
 		return
@@ -175,6 +192,7 @@ func (m *manager) SetPodStatus(pod *v1.Pod, status v1.PodStatus) {
 	m.updateStatusInternal(pod, status, pod.DeletionTimestamp != nil)
 }
 
+//设置指定Pod中指定容器的Ready,并生成新的PodReady condition,然后更新整个pod的Status
 func (m *manager) SetContainerReadiness(podUID types.UID, containerID kubecontainer.ContainerID, ready bool) {
 	m.podStatusesLock.Lock()
 	defer m.podStatusesLock.Unlock()
@@ -228,9 +246,13 @@ func (m *manager) SetContainerReadiness(podUID types.UID, containerID kubecontai
 			break
 		}
 	}
+
+	//根据Pod中容器的状态以及Pod的Phase,生成PodReady Condition
 	readyCondition := GeneratePodReadyCondition(&pod.Spec, status.ContainerStatuses, status.Phase)
+
 	if readyConditionIndex != -1 {
 		status.Conditions[readyConditionIndex] = readyCondition
+		//之前没有pod Ready Condition
 	} else {
 		glog.Warningf("PodStatus missing PodReady condition: %+v", status)
 		status.Conditions = append(status.Conditions, readyCondition)
@@ -259,7 +281,7 @@ func findContainerStatus(status *v1.PodStatus, containerID string) (containerSta
 
 }
 
-//
+//设置Pod中所有的容器的状态的Terminated
 func (m *manager) TerminatePod(pod *v1.Pod) {
 	m.podStatusesLock.Lock()
 	defer m.podStatusesLock.Unlock()
@@ -273,11 +295,13 @@ func (m *manager) TerminatePod(pod *v1.Pod) {
 	if err != nil {
 		return
 	}
+	//设置Pod中所有容器Status中的Terminated项
 	for i := range status.ContainerStatuses {
 		status.ContainerStatuses[i].State = v1.ContainerState{
 			Terminated: &v1.ContainerStateTerminated{},
 		}
 	}
+	//设置Pod中所有Init容器Status中的Terminated项
 	for i := range status.InitContainerStatuses {
 		status.InitContainerStatuses[i].State = v1.ContainerState{
 			Terminated: &v1.ContainerStateTerminated{},
@@ -290,6 +314,7 @@ func (m *manager) TerminatePod(pod *v1.Pod) {
 // necessary. Returns whether an update was triggered.
 // This method IS NOT THREAD SAFE and must be called from a locked function.
 //forceUpdate:是否强制更新
+//status为新的状态
 func (m *manager) updateStatusInternal(pod *v1.Pod, status v1.PodStatus, forceUpdate bool) bool {
 	var oldStatus v1.PodStatus
 	//获取pod的旧状态,如果pod没有缓存状态,则当前状态为旧状态;
@@ -303,6 +328,7 @@ func (m *manager) updateStatusInternal(pod *v1.Pod, status v1.PodStatus, forceUp
 	}
 
 	// Set ReadyCondition.LastTransitionTime.
+	//对比新旧状态的ReadyCondition,决定readyCondition的上一次转换时间
 	if _, readyCondition := v1.GetPodCondition(&status, v1.PodReady); readyCondition != nil {
 		// Need to set LastTransitionTime.
 		lastTransitionTime := metav1.Now()
@@ -314,6 +340,7 @@ func (m *manager) updateStatusInternal(pod *v1.Pod, status v1.PodStatus, forceUp
 	}
 
 	// Set InitializedCondition.LastTransitionTime.
+	//对比新旧状态的InitCondition,决定InitCondition的上一次转换时间
 	if _, initCondition := v1.GetPodCondition(&status, v1.PodInitialized); initCondition != nil {
 		// Need to set LastTransitionTime.
 		lastTransitionTime := metav1.Now()
@@ -325,6 +352,7 @@ func (m *manager) updateStatusInternal(pod *v1.Pod, status v1.PodStatus, forceUp
 	}
 
 	// ensure that the start time does not change across updates.
+	//更新新状态的启动时间
 	if oldStatus.StartTime != nil && !oldStatus.StartTime.IsZero() {
 		status.StartTime = oldStatus.StartTime
 	} else if status.StartTime.IsZero() {
@@ -333,6 +361,7 @@ func (m *manager) updateStatusInternal(pod *v1.Pod, status v1.PodStatus, forceUp
 		status.StartTime = &now
 	}
 
+	//转换容器状态中的各时间格式为rfc3339格式
 	normalizeStatus(pod, &status)
 	// The intent here is to prevent concurrent updates to a pod's status from
 	// clobbering each other so the phase of a pod progresses monotonically.
@@ -341,6 +370,7 @@ func (m *manager) updateStatusInternal(pod *v1.Pod, status v1.PodStatus, forceUp
 		return false // No new status.
 	}
 
+	//将新版本的状态缓存
 	newStatus := versionedPodStatus{
 		status:       status,
 		version:      cachedStatus.version + 1,
@@ -350,6 +380,7 @@ func (m *manager) updateStatusInternal(pod *v1.Pod, status v1.PodStatus, forceUp
 	m.podStatuses[pod.UID] = newStatus
 
 	select {
+	//提交更新请求给syncPod()进行处理
 	case m.podStatusChannel <- podStatusSyncRequest{pod.UID, newStatus}:
 		return true
 	default:
@@ -382,8 +413,10 @@ func (m *manager) RemoveOrphanedStatuses(podUIDs map[types.UID]bool) {
 }
 
 // syncBatch syncs pods statuses with the apiserver.
-//和apiserver同步pod状态?
+//遍历所有缓存的pod状态,找到需要更新到apiserver中pod的状态,
+//更新到apiserver中
 func (m *manager) syncBatch() {
+	//缓存需要更新的Pod状态
 	var updatedStatuses []podStatusSyncRequest
 	podToMirror, mirrorToPod := m.podManager.GetUIDTranslations()
 	func() { // Critical section
@@ -391,8 +424,7 @@ func (m *manager) syncBatch() {
 		defer m.podStatusesLock.RUnlock()
 
 		// Clean up orphaned versions.
-		//如果指定uid不存在podversion map,或者???
-
+		//如果指定uid不存在podversion map,或者??
 		for uid := range m.apiStatusVersions {
 			_, hasPod := m.podStatuses[uid]
 			_, hasMirror := mirrorToPod[uid]
@@ -410,6 +442,7 @@ func (m *manager) syncBatch() {
 				}
 				syncedUID = mirrorUID
 			}
+			//如果指定的Pod状态需要更新
 			if m.needsUpdate(syncedUID, status) {
 				updatedStatuses = append(updatedStatuses, podStatusSyncRequest{uid, status})
 			} else if m.needsReconcile(uid, status.status) {
@@ -429,9 +462,9 @@ func (m *manager) syncBatch() {
 }
 
 // syncPod syncs the given status with the API server. The caller must not hold the lock.
-//将指定Pod的状态更新到api 对应的pod中
+//将指定Pod的状态更新到api server对应的pod中
 func (m *manager) syncPod(uid types.UID, status versionedPodStatus) {
-	//检测指定pod是否需要更新,当缓存中的pod 状态版本低于pod的最新版本号,则返回
+	//检测指定pod是否需要更新,当pod状态版本缓存的版本你低于od状态缓存的最新版本号,则返回
 	if !m.needsUpdate(uid, status) {
 		glog.V(1).Infof("Status for pod %q is up-to-date; skipping", uid)
 		return
@@ -441,6 +474,7 @@ func (m *manager) syncPod(uid types.UID, status versionedPodStatus) {
 	//获取api pod
 	pod, err := m.kubeClient.Core().Pods(status.podNamespace).Get(status.podName, metav1.GetOptions{})
 	//??api pod不存在不报错???资源没有找到则报错,能够通过这种方式来判定client的出错吗?
+	//可以
 	if errors.IsNotFound(err) {
 		glog.V(3).Infof("Pod %q (%s) does not exist on the server", status.podName, uid)
 		// If the Pod is deleted the status will be cleared in
@@ -500,7 +534,7 @@ func (m *manager) syncPod(uid types.UID, status versionedPodStatus) {
 
 // needsUpdate returns whether the status is stale for the given pod UID.
 // This method is not thread safe, and most only be accessed by the sync thread.
-//检测pod的最新版本号是否低于状态的pod版本号
+//检测pod的最新版本号是否低于缓存中pod状态的版本号
 func (m *manager) needsUpdate(uid types.UID, status versionedPodStatus) bool {
 	latest, ok := m.apiStatusVersions[uid] //
 	return !ok || latest < status.version
@@ -516,6 +550,7 @@ func (m *manager) needsUpdate(uid types.UID, status versionedPodStatus) bool {
 // static pod uid here.
 // TODO(random-liu): Simplify the logic when mirror pod manager is added.
 //状态需要调整?
+// 查看apiserver中的PodStatus是否和kubelet缓存的一致,是否需要调整
 func (m *manager) needsReconcile(uid types.UID, status v1.PodStatus) bool {
 	// The pod could be a static pod, so we should translate first.
 	pod, ok := m.podManager.GetPodByUID(uid)
@@ -537,8 +572,10 @@ func (m *manager) needsReconcile(uid types.UID, status v1.PodStatus) bool {
 	if err != nil {
 		return false
 	}
+	//更新pod状态中的时间格式为rfc3339
 	normalizeStatus(pod, &podStatus)
 
+	//检测两个状态是否相同
 	if isStatusEqual(&podStatus, &status) {
 		// If the status from the source is the same with the cached status,
 		// reconcile is not needed. Just return.
@@ -557,10 +594,13 @@ func (m *manager) needsReconcile(uid types.UID, status v1.PodStatus) bool {
 // In fact, the best way to solve this is to do it on api side. However, for now, we normalize the status locally in
 // kubelet temporarily.
 // TODO(random-liu): Remove timestamp related logic after apiserver supports nanosecond or makes it consistent.
+//转换容器状态中的各时间格式为rfc3339格式
 func normalizeStatus(pod *v1.Pod, status *v1.PodStatus) *v1.PodStatus {
+	//输出时间为2012-11-01 22:08:41 +0000 +0000形式
 	normalizeTimeStamp := func(t *metav1.Time) {
 		*t = t.Rfc3339Copy()
 	}
+	//将容器的启动时间,终止起始时间和结束时间转换成rfc3339格式
 	normalizeContainerState := func(c *v1.ContainerState) {
 		if c.Running != nil {
 			normalizeTimeStamp(&c.Running.StartedAt)
@@ -574,6 +614,7 @@ func normalizeStatus(pod *v1.Pod, status *v1.PodStatus) *v1.PodStatus {
 	if status.StartTime != nil {
 		normalizeTimeStamp(status.StartTime)
 	}
+	//转换所有Condition的探测时间以及转换时间
 	for i := range status.Conditions {
 		condition := &status.Conditions[i]
 		normalizeTimeStamp(&condition.LastProbeTime)
@@ -587,6 +628,7 @@ func normalizeStatus(pod *v1.Pod, status *v1.PodStatus) *v1.PodStatus {
 		normalizeContainerState(&cstatus.LastTerminationState)
 	}
 	// Sort the container statuses, so that the order won't affect the result of comparison
+	//按容器状态名进行排序
 	sort.Sort(kubetypes.SortedContainerStatuses(status.ContainerStatuses))
 
 	// update init container statuses

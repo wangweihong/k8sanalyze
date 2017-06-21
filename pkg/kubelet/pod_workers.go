@@ -71,6 +71,7 @@ type UpdatePodOptions struct {
 // PodWorkers is an abstract interface for testability.
 type PodWorkers interface {
 	UpdatePod(options *UpdatePodOptions) //对指定的Pod进行更新(创建/更新,同步,杀死)
+	//调用见kubelet.dispatchWork(),killPodNow()
 	ForgetNonExistingPodWorkers(desiredPods map[types.UID]empty)
 	ForgetWorker(uid types.UID) //pod删除时调用,参考 kubelet.deletePOd.关闭指定Pod的goroutine
 }
@@ -200,6 +201,7 @@ func (p *podWorkers) managePodLoop(podUpdates <-chan UpdatePodOptions) {
 			p.recorder.Eventf(update.Pod, v1.EventTypeWarning, events.FailedSync, "Error syncing pod, skipping: %v", err)
 		}
 		//将po加入工作队列,并处理未传递的更新请求;如果没有未处理的,则更新worker为空闲状态
+		//
 		p.wrapUp(update.Pod.UID, err)
 	}
 }

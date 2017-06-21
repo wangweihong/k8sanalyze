@@ -24,9 +24,9 @@ type PodLifeCycleEventType string
 
 //generateEvent将根据pleg容器状态(其实就是容器状态)转换成容器事件
 const (
-	ContainerStarted PodLifeCycleEventType = "ContainerStarted" //容器正在运行
-	ContainerDied    PodLifeCycleEventType = "ContainerDied"    //容器退出
-	ContainerRemoved PodLifeCycleEventType = "ContainerRemoved" //容器被移除
+	ContainerStarted PodLifeCycleEventType = "ContainerStarted" //容器正在运行,容器处于running状态
+	ContainerDied    PodLifeCycleEventType = "ContainerDied"    //容器退出,容器处于exited状态
+	ContainerRemoved PodLifeCycleEventType = "ContainerRemoved" //容器被移除,之前容器存在,现在容器不存在
 	// PodSync is used to trigger syncing of a pod when the observed change of
 	// the state of the pod cannot be captured by any single event above.
 	PodSync PodLifeCycleEventType = "PodSync"

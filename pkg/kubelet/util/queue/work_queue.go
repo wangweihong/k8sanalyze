@@ -26,11 +26,13 @@ import (
 
 // WorkQueue allows queuing items with a timestamp. An item is
 // considered ready to process if the timestamp has expired.
+//见kubelet.go的getPodsToSync(),通过栈中的所有Pod都是将要进行同步的
 type WorkQueue interface {
 	// GetWork dequeues and returns all ready items.
 	GetWork() []types.UID //所有出栈时间早于当前时间的都出栈
 	// Enqueue inserts a new item or overwrites an existing item.
-	Enqueue(item types.UID, delay time.Duration) // deploy
+	Enqueue(item types.UID, delay time.Duration) // 只被pkg/kubelet/pod_workers.go中的wrapup()调用
+	//pod_worker调用syncPod()同步Pod时,将指定的pod添加到workqueue中
 }
 
 type basicWorkQueue struct {

@@ -89,6 +89,7 @@ func getSelfLink(name, namespace string) string {
 
 type defaultFunc func(pod *api.Pod) error
 
+//解析pod配置成v1 pod
 func tryDecodeSinglePod(data []byte, defaultFn defaultFunc) (parsed bool, pod *v1.Pod, err error) {
 	// JSON is valid YAML, so this should work for everything.
 	json, err := utilyaml.ToJSON(data)
@@ -120,6 +121,7 @@ func tryDecodeSinglePod(data []byte, defaultFn defaultFunc) (parsed bool, pod *v
 	return true, v1Pod, nil
 }
 
+//解析pod list配置成v1 pod list
 func tryDecodePodList(data []byte, defaultFn defaultFunc) (parsed bool, pods v1.PodList, err error) {
 	obj, err := runtime.Decode(api.Codecs.UniversalDecoder(), data)
 	if err != nil {

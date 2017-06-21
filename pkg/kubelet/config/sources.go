@@ -47,12 +47,13 @@ type sourcesImpl struct {
 	// lock protects access to sources seen.
 	lock sync.RWMutex
 	// set of sources seen.
-	sourcesSeen sets.String
+	sourcesSeen sets.String //所有的pod源
 	// sourcesReady is a function that evaluates if the sources are ready.
-	sourcesReadyFn SourcesReadyFn
+	sourcesReadyFn SourcesReadyFn //检测pod配置源是否就绪
 }
 
 // Add adds the specified source to the set of sources managed.
+//添加新的pod来源
 func (s *sourcesImpl) AddSource(source string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()

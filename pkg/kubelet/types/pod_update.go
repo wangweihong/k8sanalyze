@@ -39,9 +39,10 @@ const CriticalPodAnnotationKey = "scheduler.alpha.kubernetes.io/critical-pod"
 // PodOperation defines what changes will be made on a pod configuration.
 type PodOperation int
 
+//这些pod配置怎么转换成同步配置的?
 const (
 	// This is the current pod configuration
-	SET PodOperation = iota
+	SET PodOperation = iota //创建新的pod config源,见config/config.go podStorage.Merge()
 	// Pods with the given ids are new to this source
 	ADD
 	// Pods with the given ids are gracefully deleted from this source
@@ -56,6 +57,7 @@ const (
 
 	// These constants identify the sources of pods
 	// Updates from a file
+	//pod创建的来源,前两种file和http是static pod的创建来源
 	FileSource = "file"
 	// Updates from querying a web page
 	HTTPSource = "http"
@@ -76,10 +78,12 @@ const (
 // Additionally, Pods should never be nil - it should always point to an empty slice. While
 // functionally similar, this helps our unit tests properly check that the correct PodUpdates
 // are generated.
+//pod的更新
+//见kubelet.syncLoopInteration
 type PodUpdate struct {
 	Pods   []*v1.Pod
-	Op     PodOperation
-	Source string
+	Op     PodOperation //pod的更新动作
+	Source string       //来源,file,http或者是apiserver
 }
 
 // Gets all validated sources from the specified sources.
@@ -104,6 +108,7 @@ func GetValidatedSources(sources []string) ([]string, error) {
 // GetPodSource returns the source of the pod based on the annotation.
 //获取一个pod的来源, 什么样的pod才有这个annotation?通过apiserver启动的pod,并没有这个annotation
 //static pod?
+//还是全部的pod都有??
 func GetPodSource(pod *v1.Pod) (string, error) {
 	if pod.Annotations != nil {
 		if source, ok := pod.Annotations[ConfigSourceAnnotationKey]; ok {

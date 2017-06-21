@@ -416,6 +416,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.KubeletDeps) (err error) {
 		}
 
 		//创建kubeletDeps,其中初始化docker client
+		//这些依赖将会影响kubelet的创建
 		kubeDeps, err = UnsecuredKubeletDeps(s)
 		if err != nil {
 			return err
@@ -677,12 +678,13 @@ func addChaosToClientConfig(s *options.KubeletServer, config *restclient.Config)
 //   2 Kubelet binary
 //   3 Standalone 'kubernetes' binary
 // Eventually, #2 will be replaced with instances of #3
+//kubCfg是Kubelet的启动参数?是的
 func RunKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet.KubeletDeps, runOnce bool, standaloneMode bool) error {
 	//设置主机名为HostnameOverride,为空的话通过内核获取当前的主机名
 	hostname := nodeutil.GetHostname(kubeCfg.HostnameOverride)
 	// Query the cloud provider for our node name, default to hostname if kcfg.Cloud == nil
 	nodeName, err := getNodeName(kubeDeps.Cloud, hostname)
-	if err != nil {
+	if err != ni {
 		return err
 	}
 
@@ -725,6 +727,7 @@ func RunKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet
 	}
 	capabilities.Setup(kubeCfg.AllowPrivileged, privilegedSources, 0)
 
+	//安装证书?
 	credentialprovider.SetPreferredDockercfgPath(kubeCfg.RootDirectory)
 	glog.V(2).Infof("Using root directory: %v", kubeCfg.RootDirectory)
 

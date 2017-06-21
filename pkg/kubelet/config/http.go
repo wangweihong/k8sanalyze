@@ -43,6 +43,7 @@ type sourceURL struct {
 	client      *http.Client
 }
 
+//启动一个goroutine,每个指定的周期获取pod的描述,
 func NewSourceURL(url string, header http.Header, nodeName types.NodeName, period time.Duration, updates chan<- interface{}) {
 	config := &sourceURL{
 		url:      url,

@@ -62,6 +62,7 @@ func NewMux(merger Merger) *Mux {
 // source will return the same channel. This allows change and state based sources
 // to use the same channel. Different source names however will be treated as a
 // union.
+//获取指定pod配置源的channel如果没有则创建一个channel,并且启动一个线程一直监听
 func (m *Mux) Channel(source string) chan interface{} {
 	if len(source) == 0 {
 		panic("Channel given an empty name")
@@ -78,6 +79,7 @@ func (m *Mux) Channel(source string) chan interface{} {
 	return newChannel
 }
 
+//监听channel的信息,并且进行合并
 func (m *Mux) listen(source string, listenChannel <-chan interface{}) {
 	for update := range listenChannel {
 		m.merger.Merge(source, update)
@@ -123,6 +125,7 @@ func NewBroadcaster() *Broadcaster {
 }
 
 // Add registers listener to receive updates of changes.
+//添加新的监听器
 func (b *Broadcaster) Add(listener Listener) {
 	b.listenerLock.Lock()
 	defer b.listenerLock.Unlock()

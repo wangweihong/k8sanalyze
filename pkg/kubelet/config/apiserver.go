@@ -28,7 +28,9 @@ import (
 )
 
 // NewSourceApiserver creates a config source that watches and pulls from the apiserver.
+//创建一个监听器,监听apiserver上指定节点名的pod的变化
 func NewSourceApiserver(c *clientset.Clientset, nodeName types.NodeName, updates chan<- interface{}) {
+	//向api server获取pods列表和监控
 	lw := cache.NewListWatchFromClient(c.Core().RESTClient(), "pods", v1.NamespaceAll, fields.OneTermEqualSelector(api.PodHostField, string(nodeName)))
 	newSourceApiserverFromLW(lw, updates)
 }
@@ -40,7 +42,10 @@ func newSourceApiserverFromLW(lw cache.ListerWatcher, updates chan<- interface{}
 		for _, o := range objs {
 			pods = append(pods, o.(*v1.Pod))
 		}
+		//将更新后的结果发送给pod chan
 		updates <- kubetypes.PodUpdate{Pods: pods, Op: kubetypes.SET, Source: kubetypes.ApiserverSource}
 	}
+	//???
+	//启动一个线程监听pod的增量变化
 	cache.NewReflector(lw, &v1.Pod{}, cache.NewUndeltaStore(send, cache.MetaNamespaceKeyFunc), 0).Run()
 }
