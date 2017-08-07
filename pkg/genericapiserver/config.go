@@ -191,6 +191,7 @@ type SecureServingInfo struct {
 }
 
 // NewConfig returns a Config struct with the default values
+//创建新的通用服务器配置,并采用默认的运行选项
 func NewConfig() *Config {
 	config := &Config{
 		Serializer:             api.Codecs,
@@ -207,10 +208,12 @@ func NewConfig() *Config {
 	}
 
 	// this keeps the defaults in sync
+	//默认服务器运行选项.注每一项都匹配命令行参数
 	defaultOptions := options.NewServerRunOptions()
 	// unset fields that can be overridden to avoid setting values so that we won't end up with lingering values.
 	// TODO we probably want to run the defaults the other way.  A default here drives it in the CLI flags
 	defaultOptions.AuditLogPath = ""
+	//配置采用默认的运行选项
 	return config.ApplyOptions(defaultOptions)
 }
 
@@ -315,6 +318,7 @@ func (c *Config) ApplySecureServingOptions(secureServing *options.SecureServingO
 	return c, nil
 }
 
+//采用不安全选项
 func (c *Config) ApplyInsecureServingOptions(insecureServing *options.ServingOptions) *Config {
 	if insecureServing == nil || insecureServing.BindPort <= 0 {
 		return c

@@ -79,6 +79,7 @@ type WebHookAuthenticationOptions struct {
 	CacheTTL   time.Duration
 }
 
+//内建验证选项
 func NewBuiltInAuthenticationOptions() *BuiltInAuthenticationOptions {
 	return &BuiltInAuthenticationOptions{}
 }

@@ -73,6 +73,7 @@ const (
 	DefaultEndpointReconcilerInterval = 10 * time.Second
 )
 
+//???这个配置
 type Config struct {
 	GenericConfig *genericapiserver.Config
 

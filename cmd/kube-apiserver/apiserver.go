@@ -38,9 +38,12 @@ import (
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
 
+	//创建默认的apiserver 运行选项
 	s := options.NewServerRunOptions()
+	//根据启动参数更新apiserver选项中的选项
 	s.AddFlags(pflag.CommandLine)
 
+	//解析参数
 	flag.InitFlags()
 	logs.InitLogs()
 	defer logs.FlushLogs()

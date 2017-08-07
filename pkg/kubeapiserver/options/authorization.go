@@ -36,6 +36,7 @@ type BuiltInAuthorizationOptions struct {
 	WebhookCacheUnauthorizedTTL time.Duration
 }
 
+//内建验证选项
 func NewBuiltInAuthorizationOptions() *BuiltInAuthorizationOptions {
 	return &BuiltInAuthorizationOptions{
 		Mode: authorizer.ModeAlwaysAllow,

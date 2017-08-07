@@ -45,16 +45,16 @@ const kubernetesServiceName = "kubernetes"
 // loops, which manage creating the "kubernetes" service, the "default" and "kube-system"
 // namespace, and provide the IP repair check on service IPs
 type Controller struct {
-	ServiceClient   coreclient.ServicesGetter
-	NamespaceClient coreclient.NamespacesGetter
+	ServiceClient   coreclient.ServicesGetter   //获取服务的接口
+	NamespaceClient coreclient.NamespacesGetter //获取命名空间的接口
 
 	ServiceClusterIPRegistry rangeallocation.RangeRegistry
 	ServiceClusterIPInterval time.Duration
 	ServiceClusterIPRange    net.IPNet
 
-	ServiceNodePortRegistry rangeallocation.RangeRegistry
+	ServiceNodePortRegistry rangeallocation.RangeRegistry //???
 	ServiceNodePortInterval time.Duration
-	ServiceNodePortRange    utilnet.PortRange
+	ServiceNodePortRange    utilnet.PortRange //?
 
 	EndpointReconciler EndpointReconciler
 	EndpointInterval   time.Duration

@@ -63,6 +63,7 @@ import (
 
 // NewAPIServerCommand creates a *cobra.Command object with default parameters
 func NewAPIServerCommand() *cobra.Command {
+	//创建默认的apiserver 运行选项
 	s := options.NewServerRunOptions()
 	s.AddFlags(pflag.CommandLine)
 	cmd := &cobra.Command{
@@ -79,8 +80,10 @@ cluster's shared state through which all other components interact.`,
 }
 
 // Run runs the specified APIServer.  This should never exit.
+//s是apiserver根据命令行参数解析后得到的运行时选项
 func Run(s *options.ServerRunOptions) error {
 	// set defaults
+	//默认的广播地址
 	if err := s.GenericServerRunOptions.DefaultAdvertiseAddress(s.SecureServing, s.InsecureServing); err != nil {
 		return err
 	}
@@ -101,13 +104,16 @@ func Run(s *options.ServerRunOptions) error {
 	}
 
 	// create config from options
+	//创建新的通用服务器配置,并采用新通用运行选项来替换默认的运行选项
 	genericConfig := genericapiserver.NewConfig().
 		ApplyOptions(s.GenericServerRunOptions).
 		ApplyInsecureServingOptions(s.InsecureServing)
 
+		//采用安全服务器选项
 	if _, err := genericConfig.ApplySecureServingOptions(s.SecureServing); err != nil {
 		return fmt.Errorf("failed to configure https: %s", err)
 	}
+	//设置配置的验证相关
 	if err = s.Authentication.Apply(genericConfig); err != nil {
 		return fmt.Errorf("failed to configure authentication: %s", err)
 	}
@@ -246,6 +252,7 @@ func Run(s *options.ServerRunOptions) error {
 	if err != nil {
 		return fmt.Errorf("failed to create clientset: %v", err)
 	}
+	//?这个客户端的作用?apiserver使用clientset和自己通信?
 	client, err := internalclientset.NewForConfig(selfClientConfig)
 	if err != nil {
 		kubeAPIVersions := os.Getenv("KUBE_API_VERSIONS")
@@ -258,14 +265,17 @@ func Run(s *options.ServerRunOptions) error {
 		// TODO: get rid of KUBE_API_VERSIONS or define sane behaviour if set
 		glog.Errorf("Failed to create clientset with KUBE_API_VERSIONS=%q. KUBE_API_VERSIONS is only for testing. Things will break.", kubeAPIVersions)
 	}
+	//??这个共享通知器的作用?
 	sharedInformers := informers.NewSharedInformerFactory(nil, client, 10*time.Minute)
 
+	//?? 创建新的授权配置
 	authorizationConfig := s.Authorization.ToAuthorizationConfig(sharedInformers)
 	apiAuthorizer, err := authorizationConfig.New()
 	if err != nil {
 		return fmt.Errorf("invalid Authorization Config: %v", err)
 	}
 
+	//准入控制器参数
 	admissionControlPluginNames := strings.Split(s.GenericServerRunOptions.AdmissionControl, ",")
 	pluginInitializer := kubeadmission.NewPluginInitializer(client, sharedInformers, apiAuthorizer)
 	admissionController, err := admission.NewFromPlugins(admissionControlPluginNames, s.GenericServerRunOptions.AdmissionControlConfigFile, pluginInitializer)
@@ -273,6 +283,7 @@ func Run(s *options.ServerRunOptions) error {
 		return fmt.Errorf("failed to initialize plugins: %v", err)
 	}
 
+	//?
 	proxyTransport := utilnet.SetTransportDefaults(&http.Transport{
 		Dial:            proxyDialerFn,
 		TLSClientConfig: proxyTLSClientConfig,
@@ -294,6 +305,7 @@ func Run(s *options.ServerRunOptions) error {
 		sets.NewString("attach", "exec", "proxy", "log", "portforward"),
 	)
 
+	//真正的配置?
 	config := &master.Config{
 		GenericConfig: genericConfig,
 

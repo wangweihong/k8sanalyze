@@ -34,6 +34,7 @@ type EtcdOptions struct {
 	EtcdServersOverrides []string
 }
 
+//默认的etcd选项
 func NewEtcdOptions() *EtcdOptions {
 	return &EtcdOptions{
 		StorageConfig: storagebackend.Config{

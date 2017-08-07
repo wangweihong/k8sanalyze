@@ -63,6 +63,7 @@ type GeneratableKeyCert struct {
 	PairName string
 }
 
+//安全服务选项
 func NewSecureServingOptions() *SecureServingOptions {
 	return &SecureServingOptions{
 		ServingOptions: ServingOptions{
@@ -130,6 +131,7 @@ func (s *SecureServingOptions) AddDeprecatedFlags(fs *pflag.FlagSet) {
 	fs.MarkDeprecated("public-address-override", "see --bind-address instead.")
 }
 
+//不安全服务选项
 func NewInsecureServingOptions() *ServingOptions {
 	return &ServingOptions{
 		BindAddress: net.ParseIP("127.0.0.1"),

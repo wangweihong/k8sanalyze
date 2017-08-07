@@ -78,6 +78,7 @@ type sharedInformerFactory struct {
 }
 
 // NewSharedInformerFactory constructs a new instance of sharedInformerFactory
+//共享通知工厂?
 func NewSharedInformerFactory(client clientset.Interface, internalclient internalclientset.Interface, defaultResync time.Duration) SharedInformerFactory {
 	return &sharedInformerFactory{
 		client:           client,

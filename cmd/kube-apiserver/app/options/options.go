@@ -36,8 +36,9 @@ import (
 var DefaultServiceNodePortRange = utilnet.PortRange{Base: 30000, Size: 2768}
 
 // ServerRunOptions runs a kubernetes api server.
+//apiserver的选项
 type ServerRunOptions struct {
-	GenericServerRunOptions *genericoptions.ServerRunOptions
+	GenericServerRunOptions *genericoptions.ServerRunOptions //通用服务器运行时选项
 	Etcd                    *genericoptions.EtcdOptions
 	SecureServing           *genericoptions.SecureServingOptions
 	InsecureServing         *genericoptions.ServingOptions
@@ -58,6 +59,7 @@ type ServerRunOptions struct {
 }
 
 // NewServerRunOptions creates a new ServerRunOptions object with default parameters
+//创建默认的apiserver选项
 func NewServerRunOptions() *ServerRunOptions {
 	s := ServerRunOptions{
 		GenericServerRunOptions: genericoptions.NewServerRunOptions(),
@@ -87,6 +89,7 @@ func NewServerRunOptions() *ServerRunOptions {
 }
 
 // AddFlags adds flags for a specific APIServer to the specified FlagSet
+//根据启动参数更新apiserver选项中的选项
 func (s *ServerRunOptions) AddFlags(fs *pflag.FlagSet) {
 	// Add the generic flags.
 	s.GenericServerRunOptions.AddUniversalFlags(fs)

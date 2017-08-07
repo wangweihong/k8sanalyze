@@ -31,6 +31,10 @@ import (
 )
 
 // ServerRunOptions contains the options while running a generic api server.
+//这里的每项都对应一项kube-apisever的启动参数
+//通用服务运行选项参数
+//NewOptions()将会创建默认的服务选项参数,genericserver.Config采用这些选项作为配置.
+//命令行参数(k8s.io/kubernetes/cmd/kube-apiserver/app/options/options.go)的ServerRunOptions包含当前的ServerRunOptions
 type ServerRunOptions struct {
 	AdmissionControl           string
 	AdmissionControlConfigFile string
@@ -62,6 +66,7 @@ type ServerRunOptions struct {
 	WatchCacheSizes        []string
 }
 
+//创建新的默认服务器运行时选项
 func NewServerRunOptions() *ServerRunOptions {
 	return &ServerRunOptions{
 		AdmissionControl:            "AlwaysAdmit",
@@ -80,6 +85,7 @@ func NewServerRunOptions() *ServerRunOptions {
 	}
 }
 
+//默认广播地址
 func (s *ServerRunOptions) DefaultAdvertiseAddress(secure *SecureServingOptions, insecure *ServingOptions) error {
 	if s.AdvertiseAddress == nil || s.AdvertiseAddress.IsUnspecified() {
 		switch {
