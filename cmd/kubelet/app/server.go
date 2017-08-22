@@ -684,7 +684,7 @@ func RunKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *kubelet
 	hostname := nodeutil.GetHostname(kubeCfg.HostnameOverride)
 	// Query the cloud provider for our node name, default to hostname if kcfg.Cloud == nil
 	nodeName, err := getNodeName(kubeDeps.Cloud, hostname)
-	if err != ni {
+	if err != nil {
 		return err
 	}
 

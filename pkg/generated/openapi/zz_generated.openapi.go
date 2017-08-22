@@ -1305,7 +1305,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 	"v1.ContainerState": {
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ContainerState holds a possible state of container. Only one of its members may be specified. If none of them is specified, the default one is ContainerStateWaiting.",
+				Description: "ContainerState holds a possible state of container. Only one of its members may be specified. If none of them is specified, the default one is ContainerStateWaiting. 容器处于哪个状态, 则哪个状态的字段不为nil",
 				Properties: map[string]spec.Schema{
 					"waiting": {
 						SchemaProps: spec.SchemaProps{
@@ -1434,24 +1434,24 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 	"v1.ContainerStatus": {
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ContainerStatus contains details for the current status of this container.",
+				Description: "ContainerStatus contains details for the current status of this container. 描述容器的当前状态 如何更新则参见pkg/kubelet/status/status_manager.go的syncPod()",
 				Properties: map[string]spec.Schema{
 					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "This must be a DNS_LABEL. Each container in a pod must have a unique name. Cannot be updated.",
+							Description: "This must be a DNS_LABEL. Each container in a pod must have a unique name. Cannot be updated. 这个容器名并不直接对应docker/rkt中的容器名.是一个抽象的容器名 在每次重启时,该容器名将会映射不同的docker/rkt容器ID(见当前映射的容器ID(State.ContainerID)/上一次映射的容器的ID(LastTerminationState.Terminated.ContainerID))",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"state": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Details about the container's current condition.",
+							Description: "Details about the container's current condition. 当前容器状态",
 							Ref:         spec.MustCreateRef("#/definitions/v1.ContainerState"),
 						},
 					},
 					"lastState": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Details about the container's last termination condition.",
+							Description: "Details about the container's last termination condition. 上一次终止状态",
 							Ref:         spec.MustCreateRef("#/definitions/v1.ContainerState"),
 						},
 					},
@@ -1464,7 +1464,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 					},
 					"restartCount": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The number of times the container has been restarted, currently based on the number of dead containers that have not yet been removed. Note that this is calculated from dead containers. But those containers are subject to garbage collection. This value will get capped at 5 by GC.",
+							Description: "设置见pkg/kubelet/status/status_manager.go的SetContainerReadiness() The number of times the container has been restarted, currently based on the number of dead containers that have not yet been removed. Note that this is calculated from dead containers. But those containers are subject to garbage collection. This value will get capped at 5 by GC.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -1485,7 +1485,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 					},
 					"containerID": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Container's ID in the format 'docker://<container_id>'. More info: http://kubernetes.io/docs/user-guide/container-environment#container-information",
+							Description: "Container's ID in the format 'docker://<container_id>'. More info: http://kubernetes.io/docs/user-guide/container-environment#container-information 这里保存的容器ID为容器类型(docker)+真正容器ID.参考pkg/kubelet/container/runtime的ParseContainerID()",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2702,7 +2702,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 	"v1.Handler": {
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Handler defines a specific action that should be taken",
+				Description: "Handler defines a specific action that should be taken 指定命令行以及http运行的动作",
 				Properties: map[string]spec.Schema{
 					"exec": {
 						SchemaProps: spec.SchemaProps{
@@ -4312,7 +4312,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 					},
 					"allocatable": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Allocatable represents the resources of a node that are available for scheduling. Defaults to Capacity.",
+							Description: "Allocatable represents the resources of a node that are available for scheduling. Defaults to Capacity. 这是系统上所有的资源",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Schema: &spec.Schema{
@@ -5605,7 +5605,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 	"v1.PodCondition": {
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PodCondition contains details for the current condition of this pod.",
+				Description: "PodCondition contains details for the current condition of this pod. 描述Pod的状态?是记录每一次Pod的状态吗?以及探测时间吗? 见pkg/kubelet.go的generateAPIPodStatus调用的GeneratePodReadyCondition,如何生成Ready类型的Condition",
 				Properties: map[string]spec.Schema{
 					"type": {
 						SchemaProps: spec.SchemaProps{
@@ -5776,7 +5776,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 	"v1.PodLogOptions": {
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PodLogOptions is the query options for a Pod's logs REST call.",
+				Description: "PodLogOptions is the query options for a Pod's logs REST call. 获取Pod的日志参数",
 				Properties: map[string]spec.Schema{
 					"kind": {
 						SchemaProps: spec.SchemaProps{
@@ -5808,7 +5808,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 					},
 					"previous": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Return previous terminated container logs. Defaults to false.",
+							Description: "Return previous terminated container logs. Defaults to false. 是否返回上一个终止容器的日志,参考pkg/kubelet/kubelet_pod.go, 上一个终止容器的ID通过Pod.Status.ContainerStatuses.LastTerminatedState.ContainerID获得",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -5835,7 +5835,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 					},
 					"tailLines": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set, the number of lines from the end of the logs to show. If not specified, logs are shown from the creation of the container or sinceSeconds or sinceTime",
+							Description: "If set, the number of lines from the end of the logs to show. If not specified, logs are shown from the creation of the container or sinceSeconds or sinceTime 显示的行数",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -6000,7 +6000,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 					},
 					"activeDeadlineSeconds": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Optional duration in seconds the pod may be active on the node relative to StartTime before the system will actively try to mark it failed and kill associated containers. Value must be a positive integer.",
+							Description: "Optional duration in seconds the pod may be active on the node relative to StartTime before the system will actively try to mark it failed and kill associated containers. Value must be a positive integer. 设置容器的deadline,超过时间,该pod将会处于DeadlineExceed状态",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -6117,7 +6117,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 	"v1.PodStatus": {
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PodStatus represents information about the status of a pod. Status may trail the actual state of a system.",
+				Description: "PodStatus represents information about the status of a pod. Status may trail the actual state of a system. 见kubelet.generateApiPodStatus()下的convertStatusToAPIStatus将kubelet pod status转换成api pod status",
 				Properties: map[string]spec.Schema{
 					"phase": {
 						SchemaProps: spec.SchemaProps{
@@ -6128,7 +6128,7 @@ var OpenAPIDefinitions *common.OpenAPIDefinitions = &common.OpenAPIDefinitions{
 					},
 					"conditions": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Current service state of pod. More info: http://kubernetes.io/docs/user-guide/pod-states#pod-conditions",
+							Description: "Current service state of pod. More info: http://kubernetes.io/docs/user-guide/pod-states#pod-conditions ??? pod的当前状态? 为什么是数组?? 见kubelet的generateAPIPodStatus",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

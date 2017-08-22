@@ -66,7 +66,7 @@ func NewClientAccessFactory(optionalClientConfig clientcmd.ClientConfig) ClientA
 	clientConfig := optionalClientConfig
 	//使用默认的客户端配置
 	if optionalClientConfig == nil {
-		clientConfig = DefaultClientConfig(flags)
+		clientConfig = DefaultClientConfig(flags) //根据参数,环境变量生成交互型客户端配置
 	}
 
 	return NewClientAccessFactoryFromDiscovery(flags, clientConfig, &discoveryFactory{clientConfig: clientConfig})
@@ -82,26 +82,28 @@ func NewClientAccessFactoryFromDiscovery(flags *pflag.FlagSet, clientConfig clie
 	f := &ring0Factory{
 		flags:            flags,
 		clientConfig:     clientConfig,
-		discoveryFactory: discoveryFactory,
-		clientCache:      clientCache,
+		discoveryFactory: discoveryFactory, //这里只有一个字段,内容就是clientConfig
+		clientCache:      clientCache,      //缓存客户端?
 	}
 
 	return f
 }
 
+//服务发现客户端?
 type discoveryFactory struct {
-	clientConfig clientcmd.ClientConfig
+	clientConfig clientcmd.ClientConfig //客户端配置接口
 }
 
 func (f *discoveryFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
-	cfg, err := f.clientConfig.ClientConfig()
+	cfg, err := f.clientConfig.ClientConfig() //生成客户端的配置
 	if err != nil {
 		return nil, err
 	}
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg) //k8s新的客户端
 	if err != nil {
 		return nil, err
 	}
+	// 根据master的地址(如:https://192.168.8.101:6443)生成$HOME/.kube/cache/discovery/192.168.8.101_6443的目录
 	cacheDir := computeDiscoverCacheDir(filepath.Join(homedir.HomeDir(), ".kube", "cache", "discovery"), cfg.Host)
 	return NewCachedDiscoveryClient(discoveryClient, cacheDir, time.Duration(10*time.Minute)), nil
 }
@@ -109,11 +111,11 @@ func (f *discoveryFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface
 // DefaultClientConfig creates a clientcmd.ClientConfig with the following hierarchy:
 //   1.  Use the kubeconfig builder.  The number of merges and overrides here gets a little crazy.  Stay with me.
 //       1.  Merge the kubeconfig itself.  This is done with the following hierarchy rules:
-//           1.  CommandLineLocation - this parsed from the command line, so it must be late bound.  If you specify this,
+//           1.  CommandLineLocation(注:--kubeconfig) - this parsed from the command line, so it must be late bound.  If you specify this,
 //               then no other kubeconfig files are merged.  This file must exist.
 //           2.  If $KUBECONFIG is set, then it is treated as a list of files that should be merged.
-//	     3.  HomeDirectoryLocation
-//           Empty filenames are ignored.  Files with non-deserializable content produced errors.
+//	     3.  HomeDirectoryLocation (这里应该指的是$HOME/.kube/config)
+//           Empty filenames are ignored.  Files with non-deserializable(非并行化) content produced errors.
 //           The first file to set a particular value or map key wins and the value or map key is never changed.
 //           This means that the first file to set CurrentContext will have its context preserved.  It also means
 //           that if two files specify a "red-user", only values from the first file's red-user are used.  Even
@@ -146,13 +148,17 @@ func (f *discoveryFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface
 //     set, and the file /var/run/secrets/kubernetes.io/serviceaccount/token
 //     exists and is not a directory.
 func DefaultClientConfig(flags *pflag.FlagSet) clientcmd.ClientConfig {
+	//获取默认的配置文件的加载规则
+	//loadingRules:指定了客户端配置文件路径 优先从$KUBECONFIG获取,其次$Home/.kube/config
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	// use the standard defaults for this client command
 	// DEPRECATED: remove and replace with something more accurate
-	loadingRules.DefaultClientConfig = &clientcmd.DefaultClientConfig
+	loadingRules.DefaultClientConfig = &clientcmd.DefaultClientConfig //创建一个默认的客户端配置(master:localhost8080)
 
+	//根据参数更改客户端配置文件
 	flags.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 
+	//默认master
 	overrides := &clientcmd.ConfigOverrides{ClusterDefaults: clientcmd.ClusterDefaults}
 
 	flagNames := clientcmd.RecommendedConfigOverrideFlags("")
@@ -160,6 +166,7 @@ func DefaultClientConfig(flags *pflag.FlagSet) clientcmd.ClientConfig {
 	flagNames.ClusterOverrideFlags.APIServer.ShortName = "s"
 
 	clientcmd.BindOverrideFlags(overrides, flags, flagNames)
+	//交互型客户端配置
 	clientConfig := clientcmd.NewInteractiveDeferredLoadingClientConfig(loadingRules, overrides, os.Stdin)
 
 	return clientConfig
@@ -586,10 +593,13 @@ See http://kubernetes.io/docs/user-guide/services-firewalls for more details.
 var overlyCautiousIllegalFileCharacters = regexp.MustCompile(`[^(\w/\.)]`)
 
 // computeDiscoverCacheDir takes the parentDir and the host and comes up with a "usually non-colliding" name.
+//生成发现缓存目录
 func computeDiscoverCacheDir(parentDir, host string) string {
 	// strip the optional scheme from host if its there:
+	//过滤掉主机的协议头
 	schemelessHost := strings.Replace(strings.Replace(host, "https://", "", 1), "http://", "", 1)
 	// now do a simple collapse of non-AZ09 characters.  Collisions are possible but unlikely.  Even if we do collide the problem is short lived
+	//将非.或者字符数值的都替换成_
 	safeHost := overlyCautiousIllegalFileCharacters.ReplaceAllString(schemelessHost, "_")
 
 	return filepath.Join(parentDir, safeHost)

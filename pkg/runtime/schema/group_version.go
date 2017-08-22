@@ -116,10 +116,11 @@ func (gk *GroupKind) String() string {
 
 // GroupVersionKind unambiguously identifies a kind.  It doesn't anonymously include GroupVersion
 // to avoid automatic coercion.  It doesn't use a GroupVersion to avoid custom marshalling
+
 type GroupVersionKind struct {
-	Group   string
-	Version string
-	Kind    string
+	Group   string //api组
+	Version string //api版本
+	Kind    string //对象类型
 }
 
 // Empty returns true if group, version, and kind are empty
@@ -141,8 +142,8 @@ func (gvk GroupVersionKind) String() string {
 
 // GroupVersion contains the "group" and the "version", which uniquely identifies the API.
 type GroupVersion struct {
-	Group   string
-	Version string
+	Group   string //api 组
+	Version string //版本
 }
 
 // Empty returns true if group and version are empty

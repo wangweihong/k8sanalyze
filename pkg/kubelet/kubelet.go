@@ -692,7 +692,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 			)
 			klet.containerRuntime = runtime
 			klet.runner = kubecontainer.DirectStreamingRunner(runtime)
-			unner(runtime)
+			//			unner(runtime)
 		case "rkt":
 			// TODO: Include hairpin mode settings in rkt?
 			conf := &rkt.Config{

@@ -42,7 +42,7 @@ type CachedDiscoveryClient struct {
 	delegate discovery.DiscoveryInterface
 
 	// cacheDirectory is the directory where discovery docs are held.  It must be unique per host:port combination to work well.
-	cacheDirectory string
+	cacheDirectory string // 如$HOME/.kube/cache/discovery/192.168.8.101_6443的目录
 
 	// ttl is how long the cache should be considered valid
 	ttl time.Duration

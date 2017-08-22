@@ -33,10 +33,10 @@ import (
 // passing extraneous information down a call stack
 type DeferredLoadingClientConfig struct {
 	loader         ClientConfigLoader
-	overrides      *ConfigOverrides
+	overrides      *ConfigOverrides // 配置可覆盖项??
 	fallbackReader io.Reader
 
-	clientConfig ClientConfig
+	clientConfig ClientConfig // 客户端配置生成接口
 	loadingLock  sync.Mutex
 
 	// provided for testing

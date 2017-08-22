@@ -36,12 +36,12 @@ import (
 var (
 	// ClusterDefaults has the same behavior as the old EnvVar and DefaultCluster fields
 	// DEPRECATED will be replaced
-	ClusterDefaults = clientcmdapi.Cluster{Server: getDefaultServer()}
+	ClusterDefaults = clientcmdapi.Cluster{Server: getDefaultServer()} //从KUBENETES_MASTER获取Master地址,或者默认localhost:8080
 	// DefaultClientConfig represents the legacy behavior of this package for defaulting
 	// DEPRECATED will be replace
 	DefaultClientConfig = DirectClientConfig{*clientcmdapi.NewConfig(), "", &ConfigOverrides{
 		ClusterDefaults: ClusterDefaults,
-	}, nil, NewDefaultClientConfigLoadingRules(), promptedCredentials{}}
+	}, nil, NewDefaultClientConfigLoadingRules(), promptedCredentials{}} //创建一个默认的客户端配置.Master地址为KUBENETES_MASTER或者localhost:8080,客户端配置文件为$KUBECONFIG或者$HOME/.kube/config
 )
 
 // getDefaultServer returns a default setting for DefaultClientConfig
@@ -76,9 +76,9 @@ type promptedCredentials struct {
 
 // DirectClientConfig is a ClientConfig interface that is backed by a clientcmdapi.Config, options overrides, and an optional fallbackReader for auth information
 type DirectClientConfig struct {
-	config         clientcmdapi.Config
-	contextName    string
-	overrides      *ConfigOverrides
+	config         clientcmdapi.Config //这个就是$HOME/.kube/config配置的内容
+	contextName    string              //指定所使用的context,如果为空,则使用config.CurrentContext.
+	overrides      *ConfigOverrides    //用于覆盖config字段的内容?
 	fallbackReader io.Reader
 	configAccess   ConfigAccess
 	// promptedCredentials store the credentials input by the user
@@ -115,6 +115,7 @@ func (config *DirectClientConfig) ClientConfig() (*restclient.Config, error) {
 		return nil, err
 	}
 
+	//获得
 	_, err = config.getContext()
 	if err != nil {
 		return nil, err

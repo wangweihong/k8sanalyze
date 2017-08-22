@@ -184,7 +184,7 @@ type ClientAccessFactory interface {
 // Generally they provide object typing and functions that build requests based on the negotiated clients.
 type ObjectMappingFactory interface {
 	// Returns interfaces for dealing with arbitrary runtime.Objects.
-	Object() (meta.RESTMapper, runtime.ObjectTyper)
+	Object() (meta.RESTMapper, runtime.ObjectTyper) //这个和UnstrutureObject之间的区别?
 	// Returns interfaces for dealing with arbitrary
 	// runtime.Unstructured. This performs API calls to discover types.
 	UnstructuredObject() (meta.RESTMapper, runtime.ObjectTyper, error)
@@ -231,6 +231,7 @@ type BuilderFactory interface {
 	NewBuilder() *resource.Builder
 }
 
+//获取指定api组的版本
 func getGroupVersionKinds(gvks []schema.GroupVersionKind, group string) []schema.GroupVersionKind {
 	result := []schema.GroupVersionKind{}
 	for ix := range gvks {
@@ -265,6 +266,7 @@ type factory struct {
 // NewFactory creates a factory with the default Kubernetes resources defined
 // if optionalClientConfig is nil, then flags will be bound to a new clientcmd.ClientConfig.
 // if optionalClientConfig is not nil, then this factory will make use of it.
+//kubectl执行命名时,默认optioncalClientConfig为空
 func NewFactory(optionalClientConfig clientcmd.ClientConfig) Factory {
 	clientAccessFactory := NewClientAccessFactory(optionalClientConfig)
 	objectMappingFactory := NewObjectMappingFactory(clientAccessFactory)
@@ -410,6 +412,7 @@ func substituteUserHome(dir string) (string, error) {
 	return path.Join(parts...), nil
 }
 
+//从服务端下载schema,并保存在指定的目录下
 func writeSchemaFile(schemaData []byte, cacheDir, cacheFile, prefix, groupVersion string) error {
 	if err := os.MkdirAll(path.Join(cacheDir, prefix, groupVersion), 0755); err != nil {
 		return err
@@ -435,6 +438,7 @@ func writeSchemaFile(schemaData []byte, cacheDir, cacheFile, prefix, groupVersio
 	return nil
 }
 
+//从server端下载schema并保存
 func getSchemaAndValidate(c schemaClient, data []byte, prefix, groupVersion, cacheDir string, delegate validation.Schema) (err error) {
 	var schemaData []byte
 	var firstSeen bool

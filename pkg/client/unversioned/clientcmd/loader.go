@@ -47,12 +47,13 @@ const (
 	RecommendedSchemaName       = "schema"
 )
 
-var RecommendedHomeFile = path.Join(homedir.HomeDir(), RecommendedHomeDir, RecommendedFileName)
-var RecommendedSchemaFile = path.Join(homedir.HomeDir(), RecommendedHomeDir, RecommendedSchemaName)
+var RecommendedHomeFile = path.Join(homedir.HomeDir(), RecommendedHomeDir, RecommendedFileName) //$HOME/.kube/config
+var RecommendedSchemaFile = path.Join(homedir.HomeDir(), RecommendedHomeDir, RecommendedSchemaName) //$HOME/.kube/schema
 
 // currentMigrationRules returns a map that holds the history of recommended home directories used in previous versions.
 // Any future changes to RecommendedHomeFile and related are expected to add a migration rule here, in order to make
 // sure existing config files are migrated to their new locations properly.
+//老版本默认的配置文件在$HOME/.kube/.kubeconfig文件中
 func currentMigrationRules() map[string]string {
 	oldRecommendedHomeFile := path.Join(os.Getenv("HOME"), "/.kube/.kubeconfig")
 	oldRecommendedWindowsHomeFile := path.Join(os.Getenv("HOME"), RecommendedHomeDir, RecommendedFileName)
@@ -111,7 +112,7 @@ func (g *ClientConfigGetter) IsDefaultConfig(config *restclient.Config) bool {
 // ExplicitPath is special, because if a user specifically requests a certain file be used and error is reported if thie file is not present
 type ClientConfigLoadingRules struct {
 	ExplicitPath string
-	Precedence   []string
+	Precedence   []string //优先项.其内容为$KUBECONFIG的值或者$HOME/.kube/config,见 NewDefaultClientConfigLoadingRules
 
 	// MigrationRules is a map of destination files to source files.  If a destination file is not present, then the source file is checked.
 	// If the source file is present, then it is copied to the destination file BEFORE any further loading happens.
@@ -123,7 +124,7 @@ type ClientConfigLoadingRules struct {
 
 	// DefaultClientConfig is an optional field indicating what rules to use to calculate a default configuration.
 	// This should match the overrides passed in to ClientConfig loader.
-	DefaultClientConfig ClientConfig
+	DefaultClientConfig ClientConfig // api client config interface
 }
 
 // ClientConfigLoadingRules implements the ClientConfigLoader interface.
@@ -131,9 +132,11 @@ var _ ClientConfigLoader = &ClientConfigLoadingRules{}
 
 // NewDefaultClientConfigLoadingRules returns a ClientConfigLoadingRules object with default fields filled in.  You are not required to
 // use this constructor
+//获取默认的配置文件的加载规则
 func NewDefaultClientConfigLoadingRules() *ClientConfigLoadingRules {
 	chain := []string{}
 
+	//获得KUBECONFIG环境变量获取配置文件路径,如果为空,则使用默认$HOME/.kube/config配置文件
 	envVarFiles := os.Getenv(RecommendedConfigPathEnvVar)
 	if len(envVarFiles) != 0 {
 		chain = append(chain, filepath.SplitList(envVarFiles)...)
@@ -144,7 +147,7 @@ func NewDefaultClientConfigLoadingRules() *ClientConfigLoadingRules {
 
 	return &ClientConfigLoadingRules{
 		Precedence:     chain,
-		MigrationRules: currentMigrationRules(),
+		MigrationRules: currentMigrationRules(), //老版本的配置文件路径在$HOME/.kube/.kubeconfig
 	}
 }
 

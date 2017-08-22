@@ -136,6 +136,7 @@ func FlattenConfig(config *Config) error {
 	return nil
 }
 
+//从指定路径读取配置文件
 func FlattenContent(path *string, contents *[]byte, baseDir string) error {
 	if len(*path) != 0 {
 		if len(*contents) > 0 {

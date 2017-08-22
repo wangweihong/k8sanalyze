@@ -27,7 +27,7 @@ import (
 // ConfigOverrides holds values that should override whatever information is pulled from the actual Config object.  You can't
 // simply use an actual Config object, because Configs hold maps, but overrides are restricted to "at most one"
 type ConfigOverrides struct {
-	AuthInfo clientcmdapi.AuthInfo
+	AuthInfo clientcmdapi.AuthInfo  //集群验证信息?
 	// ClusterDefaults are applied before the configured cluster info is loaded.
 	ClusterDefaults clientcmdapi.Cluster
 	ClusterInfo     clientcmdapi.Cluster
