@@ -47,13 +47,14 @@ const (
 	RecommendedSchemaName       = "schema"
 )
 
-var RecommendedHomeFile = path.Join(homedir.HomeDir(), RecommendedHomeDir, RecommendedFileName) //$HOME/.kube/config
+var RecommendedHomeFile = path.Join(homedir.HomeDir(), RecommendedHomeDir, RecommendedFileName)     //$HOME/.kube/config
 var RecommendedSchemaFile = path.Join(homedir.HomeDir(), RecommendedHomeDir, RecommendedSchemaName) //$HOME/.kube/schema
 
 // currentMigrationRules returns a map that holds the history of recommended home directories used in previous versions.
 // Any future changes to RecommendedHomeFile and related are expected to add a migration rule here, in order to make
 // sure existing config files are migrated to their new locations properly.
 //老版本默认的配置文件在$HOME/.kube/.kubeconfig文件中
+//将会将老版本的配置文件$HOME/.kube/.kubeconfig迁移到$HOME/.kube/config中
 func currentMigrationRules() map[string]string {
 	oldRecommendedHomeFile := path.Join(os.Getenv("HOME"), "/.kube/.kubeconfig")
 	oldRecommendedWindowsHomeFile := path.Join(os.Getenv("HOME"), RecommendedHomeDir, RecommendedFileName)
@@ -66,6 +67,8 @@ func currentMigrationRules() map[string]string {
 	return migrationRules
 }
 
+//被ClientConfigLoadingRules实现
+//配置加载规则
 type ClientConfigLoader interface {
 	ConfigAccess
 	// IsDefaultConfig returns true if the returned config matches the defaults.
@@ -76,8 +79,9 @@ type ClientConfigLoader interface {
 
 type KubeconfigGetter func() (*clientcmdapi.Config, error)
 
+//
 type ClientConfigGetter struct {
-	kubeconfigGetter KubeconfigGetter
+	kubeconfigGetter KubeconfigGetter //返回命令行工具配置
 }
 
 // ClientConfigGetter implements the ClientConfigLoader interface.
@@ -110,17 +114,21 @@ func (g *ClientConfigGetter) IsDefaultConfig(config *restclient.Config) bool {
 // Callers can put the chain together however they want, but we'd recommend:
 // EnvVarPathFiles if set (a list of files if set) OR the HomeDirectoryPath
 // ExplicitPath is special, because if a user specifically requests a certain file be used and error is reported if thie file is not present
+//客户端配置加载规则
+//见默认的加载规则clientcmd.NewDefaultClientConfigLoadingRules()
+//但有些客户端会根据标志--kubeconfig或者环境变量等,更改加载规则的内容
 type ClientConfigLoadingRules struct {
-	ExplicitPath string
+	ExplicitPath string   //??通过参数-kubeconfig指定的配置文件的路径?应该是,指定了显式路径,就不会再管HOME/.kube/config以及$KUBECONFIG指定的配置文件(precedence的值),见Load()方法
 	Precedence   []string //优先项.其内容为$KUBECONFIG的值或者$HOME/.kube/config,见 NewDefaultClientConfigLoadingRules
 
 	// MigrationRules is a map of destination files to source files.  If a destination file is not present, then the source file is checked.
 	// If the source file is present, then it is copied to the destination file BEFORE any further loading happens.
-	MigrationRules map[string]string
+	MigrationRules map[string]string //key为destination,value是source,将source路径的文件拷贝到destination路径.见Migrate()
+	//见currentMigrationRules(),默认的迁移规则是将老版本的$HOME/.kube/kubeconfig文件迁移到$HOME/.kube/config文件
 
 	// DoNotResolvePaths indicates whether or not to resolve paths with respect to the originating files.  This is phrased as a negative so
 	// that a default object that doesn't set this will usually get the behavior it wants.
-	DoNotResolvePaths bool
+	DoNotResolvePaths bool //当配置文件中配置项引用了想读路径的文件,是否解析该路径为绝对路径
 
 	// DefaultClientConfig is an optional field indicating what rules to use to calculate a default configuration.
 	// This should match the overrides passed in to ClientConfig loader.
@@ -133,6 +141,9 @@ var _ ClientConfigLoader = &ClientConfigLoadingRules{}
 // NewDefaultClientConfigLoadingRules returns a ClientConfigLoadingRules object with default fields filled in.  You are not required to
 // use this constructor
 //获取默认的配置文件的加载规则
+//1.优先从KUBECONFIG环境变量中获取配置文件
+//2.如果环境变量为空,则从$HOME/.kube/config文件中读取
+//3.默认迁移规则是$HOME/.kube/.kubeconfig到$HOME/.kube/config
 func NewDefaultClientConfigLoadingRules() *ClientConfigLoadingRules {
 	chain := []string{}
 
@@ -147,7 +158,7 @@ func NewDefaultClientConfigLoadingRules() *ClientConfigLoadingRules {
 
 	return &ClientConfigLoadingRules{
 		Precedence:     chain,
-		MigrationRules: currentMigrationRules(), //老版本的配置文件路径在$HOME/.kube/.kubeconfig
+		MigrationRules: currentMigrationRules(), //默认迁移规则是将$HOME/.kube/.kubeconfig迁移到$HOME/.kube/config中
 	}
 }
 
@@ -164,7 +175,9 @@ func NewDefaultClientConfigLoadingRules() *ClientConfigLoadingRules {
 // non-conflicting entries from the second file's "red-user" are discarded.
 // Relative paths inside of the .kubeconfig files are resolved against the .kubeconfig file's parent folder
 // and only absolute file paths are returned.
+//加载合并配置文件生成kubectl配置
 func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
+	//根据迁移规则,拷贝迁移规则中的源文件到目的文件中
 	if err := rules.Migrate(); err != nil {
 		return nil, err
 	}
@@ -174,6 +187,7 @@ func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
 	kubeConfigFiles := []string{}
 
 	// Make sure a file we were explicitly told to use exists
+	//强制指定了一个kubeconfig文件,--kubeconfig参数
 	if len(rules.ExplicitPath) > 0 {
 		if _, err := os.Stat(rules.ExplicitPath); os.IsNotExist(err) {
 			return nil, err
@@ -186,12 +200,14 @@ func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
 
 	kubeconfigs := []*clientcmdapi.Config{}
 	// read and cache the config files so that we only look at them once
+	//遍历所有的配置文件
 	for _, filename := range kubeConfigFiles {
 		if len(filename) == 0 {
 			// no work to do
 			continue
 		}
 
+		//从配置文件中加载Kubectl 配置
 		config, err := LoadFromFile(filename)
 		if os.IsNotExist(err) {
 			// skip missing files
@@ -201,13 +217,17 @@ func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
 			errlist = append(errlist, fmt.Errorf("Error loading config file \"%s\": %v", filename, err))
 			continue
 		}
-
+		//添加到配置项中
 		kubeconfigs = append(kubeconfigs, config)
 	}
 
 	// first merge all of our maps
+	//创建新的kubectl配置
 	mapConfig := clientcmdapi.NewConfig()
 
+	//整合所有的kubectl配置,到Mapconfig
+	//同样的字段中的值,会被后续的配置所覆盖
+	//kubeconfigs[1].a=1, 而kubeconfigs[2].a=2,mergo.Merge(kubeconfigs[1],kubeconfigs[2]),则kubeconfigs[1].a的值就等于2
 	for _, kubeconfig := range kubeconfigs {
 		mergo.Merge(mapConfig, kubeconfig)
 	}
@@ -217,16 +237,21 @@ func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
 	nonMapConfig := clientcmdapi.NewConfig()
 	for i := len(kubeconfigs) - 1; i >= 0; i-- {
 		kubeconfig := kubeconfigs[i]
+		//合并所有配置到nonMapConfig,
 		mergo.Merge(nonMapConfig, kubeconfig)
 	}
 
 	// since values are overwritten, but maps values are not, we can merge the non-map config on top of the map config and
 	// get the values we expect.
+	//创建新的kubectl配置
 	config := clientcmdapi.NewConfig()
+	//合并m
 	mergo.Merge(config, mapConfig)
 	mergo.Merge(config, nonMapConfig)
 
+	//确认是否解析路径
 	if rules.ResolvePaths() {
+		//解析配置中相对路径的引用文件为绝对路径
 		if err := ResolveLocalPaths(config); err != nil {
 			errlist = append(errlist, err)
 		}
@@ -236,6 +261,7 @@ func (rules *ClientConfigLoadingRules) Load() (*clientcmdapi.Config, error) {
 
 // Migrate uses the MigrationRules map.  If a destination file is not present, then the source file is checked.
 // If the source file is present, then it is copied to the destination file BEFORE any further loading happens.
+//根据迁移规则,拷贝迁移规则中的源文件到目的文件中
 func (rules *ClientConfigLoadingRules) Migrate() error {
 	if rules.MigrationRules == nil {
 		return nil
@@ -345,11 +371,14 @@ func (rules *ClientConfigLoadingRules) IsDefaultConfig(config *restclient.Config
 }
 
 // LoadFromFile takes a filename and deserializes the contents into Config object
+//解析kubeconfig文件,并加载成kubectl config
 func LoadFromFile(filename string) (*clientcmdapi.Config, error) {
+	//读取配置文件
 	kubeconfigBytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
+	//加载配置文件并且进行解析
 	config, err := Load(kubeconfigBytes)
 	if err != nil {
 		return nil, err
@@ -385,12 +414,15 @@ func LoadFromFile(filename string) (*clientcmdapi.Config, error) {
 
 // Load takes a byte slice and deserializes the contents into Config object.
 // Encapsulates deserialization without assuming the source is a file.
+//解析配置内容为kubectl配置
 func Load(data []byte) (*clientcmdapi.Config, error) {
 	config := clientcmdapi.NewConfig()
 	// if there's no data in a file, return the default object instead of failing (DecodeInto reject empty input)
 	if len(data) == 0 {
 		return config, nil
 	}
+	//利用Codec机型解码
+	//这个Codec是静态初始化的,可以直接使用
 	decoded, _, err := clientcmdlatest.Codec.Decode(data, &schema.GroupVersionKind{Version: clientcmdlatest.Version, Kind: "Config"}, config)
 	if err != nil {
 		return nil, err
@@ -400,6 +432,7 @@ func Load(data []byte) (*clientcmdapi.Config, error) {
 
 // WriteToFile serializes the config to yaml and writes it out to a file.  If not present, it creates the file with the mode 0600.  If it is present
 // it stomps the contents
+//将kubectl配置写到指定的文件中
 func WriteToFile(config clientcmdapi.Config, filename string) error {
 	content, err := Write(config)
 	if err != nil {
@@ -447,6 +480,7 @@ func lockName(filename string) string {
 
 // Write serializes the config to yaml.
 // Encapsulates serialization without assuming the destination is a file.
+//将kubectl config编码成[]byte,写到文件文件中就是
 func Write(config clientcmdapi.Config) ([]byte, error) {
 	return runtime.Encode(clientcmdlatest.Codec, &config)
 }
@@ -458,16 +492,19 @@ func (rules ClientConfigLoadingRules) ResolvePaths() bool {
 // ResolveLocalPaths resolves all relative paths in the config object with respect to the stanza's LocationOfOrigin
 // this cannot be done directly inside of LoadFromFile because doing so there would make it impossible to load a file without
 // modification of its contents.
+//解析配置中相对路径的引用文件为绝对路径
 func ResolveLocalPaths(config *clientcmdapi.Config) error {
 	for _, cluster := range config.Clusters {
 		if len(cluster.LocationOfOrigin) == 0 {
 			continue
 		}
+		//获取指定目录的绝对路径
 		base, err := filepath.Abs(filepath.Dir(cluster.LocationOfOrigin))
 		if err != nil {
 			return fmt.Errorf("Could not determine the absolute path of config file %s: %v", cluster.LocationOfOrigin, err)
 		}
 
+		//解析集群引用的证书文件的绝对路径
 		if err := ResolvePaths(GetClusterFileReferences(cluster), base); err != nil {
 			return err
 		}
@@ -476,6 +513,8 @@ func ResolveLocalPaths(config *clientcmdapi.Config) error {
 		if len(authInfo.LocationOfOrigin) == 0 {
 			continue
 		}
+
+		//解析授权引用的证书文件的绝对路径
 		base, err := filepath.Abs(filepath.Dir(authInfo.LocationOfOrigin))
 		if err != nil {
 			return fmt.Errorf("Could not determine the absolute path of config file %s: %v", authInfo.LocationOfOrigin, err)
@@ -535,10 +574,12 @@ func RelativizeConfigPaths(config *clientcmdapi.Config, base string) error {
 	return RelativizePathWithNoBacksteps(GetConfigFileReferences(config), base)
 }
 
+//解析指定配置中引用的文件的相对路径为绝对路径
 func ResolveConfigPaths(config *clientcmdapi.Config, base string) error {
 	return ResolvePaths(GetConfigFileReferences(config), base)
 }
 
+//获得所有引用的外部文件
 func GetConfigFileReferences(config *clientcmdapi.Config) []*string {
 	refs := []*string{}
 
@@ -552,15 +593,18 @@ func GetConfigFileReferences(config *clientcmdapi.Config) []*string {
 	return refs
 }
 
+//获得服务器证书的路径
 func GetClusterFileReferences(cluster *clientcmdapi.Cluster) []*string {
 	return []*string{&cluster.CertificateAuthority}
 }
 
+//获得授权证书的路径
 func GetAuthInfoFileReferences(authInfo *clientcmdapi.AuthInfo) []*string {
 	return []*string{&authInfo.ClientCertificate, &authInfo.ClientKey, &authInfo.TokenFile}
 }
 
 // ResolvePaths updates the given refs to be absolute paths, relative to the given base directory
+//refs中非绝对的路径,添加base前缀
 func ResolvePaths(refs []*string, base string) error {
 	for _, ref := range refs {
 		// Don't resolve empty paths
@@ -600,6 +644,7 @@ func RelativizePathWithNoBacksteps(refs []*string, base string) error {
 	return nil
 }
 
+//获得指定path相对于base的路径
 func MakeRelative(path, base string) (string, error) {
 	if len(path) > 0 {
 		rel, err := filepath.Rel(base, path)

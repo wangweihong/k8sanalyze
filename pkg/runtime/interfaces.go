@@ -47,6 +47,8 @@ type Encoder interface {
 }
 
 // Decoders attempt to load an object from data.
+//从yaml资源字段进行解析吗?
+//见k8s.io/kubernetes/pkg/kubectl/cmd/util/factory_client_access.go ring0Factory.Decoder()实现
 type Decoder interface {
 	// Decode attempts to deserialize the provided data using either the innate typing of the scheme or the
 	// default kind, group, and version provided. It returns a decoded object as well as the kind, group, and
@@ -55,7 +57,7 @@ type Decoder interface {
 	// guaranteed to be populated. The returned object is not guaranteed to match into. If defaults are
 	// provided, they are applied to the data by default. If no defaults or partial defaults are provided, the
 	// type of the into may be used to guide conversion decisions.
-	Decode(data []byte, defaults *schema.GroupVersionKind, into Object) (Object, *schema.GroupVersionKind, error)
+	Decode(data []byte, defaults *schema.GroupVersionKind, into Object) (Object, *schema.GroupVersionKind, error) //
 }
 
 // Serializer is the core interface for transforming objects into a serialized format and back.

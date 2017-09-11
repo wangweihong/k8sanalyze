@@ -50,15 +50,17 @@ type DiscoveryInterface interface {
 }
 
 // CachedDiscoveryInterface is a DiscoveryInterface with cache invalidation and freshness.
+//参考k8s.io/kubernetes/pkg/kubectl/cmd/util/factory_object_mapping.go"的UnstructuredObject()
 type CachedDiscoveryInterface interface {
 	DiscoveryInterface
 	// Fresh returns true if no cached data was used that had been retrieved before the instantiation.
-	Fresh() bool
+	Fresh() bool //???
 	// Invalidate enforces that no cached data is used in the future that is older than the current time.
 	Invalidate()
 }
 
 // ServerGroupsInterface has methods for obtaining supported groups on the API server
+//获取apiserver中apigroups信息
 type ServerGroupsInterface interface {
 	// ServerGroups returns the supported groups, with information like supported versions and the
 	// preferred version.

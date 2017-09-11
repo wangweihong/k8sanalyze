@@ -25,6 +25,9 @@ import (
 
 // Config holds the information needed to build connect to remote kubernetes clusters as a given user
 // IMPORTANT if you add fields to this struct, please update IsConfigEmpty()
+//~/.kube/config文件会转换成这个配置文件.但特别注意,不然直接使用json.MarshalIntent(),然后写到文件的方式.
+//因为config文件中Cluster等项是结构体,但不是map.
+//可以通过 "k8s.io/kubernetes/pkg/client/unversioned/clientcmd"提供的Load()/WriteToFile()来进行更改
 type Config struct {
 	// Legacy field from pkg/api/types.go TypeMeta.
 	// TODO(jlowdermilk): remove this after eliminating downstream dependencies.
@@ -64,7 +67,8 @@ type Preferences struct {
 // Cluster contains information about how to communicate with a kubernetes cluster
 type Cluster struct {
 	// LocationOfOrigin indicates where this object came from.  It is used for round tripping config post-merge, but never serialized.
-	LocationOfOrigin string
+	//这里指定一个路径,当通过CertificateAuthority指定了文件(该文件非绝对路径时),将结合LocationOfOrigin获取完整的路径
+	LocationOfOrigin string //见"k8s.io/kubernetes/pkg/client/unversioned/clientcmd/loader.go"的ResolveLocalPaths
 	// Server is the address of the kubernetes cluster (https://hostname:port).
 	Server string `json:"server"`
 	// APIVersion is the preferred api version for communicating with the kubernetes cluster (v1, v2, etc).
@@ -87,7 +91,8 @@ type Cluster struct {
 // AuthInfo contains information that describes identity information.  This is use to tell the kubernetes cluster who you are.
 type AuthInfo struct {
 	// LocationOfOrigin indicates where this object came from.  It is used for round tripping config post-merge, but never serialized.
-	LocationOfOrigin string
+	//这里指定一个路径,当通过CertificateAuthority指定了文件(该文件非绝对路径时),将结合LocationOfOrigin获取完整的路径
+	LocationOfOrigin string //见"k8s.io/kubernetes/pkg/client/unversioned/clientcmd/loader.go"的ResolveLocalPaths
 	// ClientCertificate is the path to a client cert file for TLS.
 	// +optional
 	ClientCertificate string `json:"client-certificate,omitempty"`
@@ -124,9 +129,10 @@ type AuthInfo struct {
 }
 
 // Context is a tuple of references to a cluster (how do I communicate with a kubernetes cluster), a user (how do I identify myself), and a namespace (what subset of resources do I want to work with)
+//用来描述使用哪个用户来访问哪个集群
 type Context struct {
 	// LocationOfOrigin indicates where this object came from.  It is used for round tripping config post-merge, but never serialized.
-	LocationOfOrigin string
+	LocationOfOrigin string //见"k8s.io/kubernetes/pkg/client/unversioned/clientcmd/loader.go"的ResolveLocalPaths
 	// Cluster is the name of the cluster for this context
 	Cluster string `json:"cluster"`
 	// AuthInfo is the name of the authInfo for this context

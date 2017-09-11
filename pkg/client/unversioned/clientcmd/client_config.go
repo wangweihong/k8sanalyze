@@ -56,15 +56,15 @@ func getDefaultServer() string {
 // ClientConfig is used to make it easy to get an api server client
 type ClientConfig interface {
 	// RawConfig returns the merged result of all overrides
-	RawConfig() (clientcmdapi.Config, error)
-	// ClientConfig returns a complete client config
+	RawConfig() (clientcmdapi.Config, error) //合并后的配置项
+	// ClientConfig returns a complete client config 完整的配置项,并没有进行合并;即有些通过标志位获得配置值还没有合并
 	ClientConfig() (*restclient.Config, error)
 	// Namespace returns the namespace resulting from the merged
 	// result of all overrides and a boolean indicating if it was
 	// overridden
 	Namespace() (string, bool, error)
 	// ConfigAccess returns the rules for loading/persisting the config.
-	ConfigAccess() ConfigAccess
+	ConfigAccess() ConfigAccess //客户端配置加载规则
 }
 
 type PersistAuthProviderConfigForUser func(user string) restclient.AuthProviderConfigPersister
@@ -76,26 +76,30 @@ type promptedCredentials struct {
 
 // DirectClientConfig is a ClientConfig interface that is backed by a clientcmdapi.Config, options overrides, and an optional fallbackReader for auth information
 type DirectClientConfig struct {
-	config         clientcmdapi.Config //这个就是$HOME/.kube/config配置的内容
+	config         clientcmdapi.Config //这个就是$HOME/.kube/config配置的内容.正确的说是根据加载规则加载配置文件的内容.注意,这里的配置并不是最新的,需要和overrides中的配置合并
 	contextName    string              //指定所使用的context,如果为空,则使用config.CurrentContext.
-	overrides      *ConfigOverrides    //用于覆盖config字段的内容?
-	fallbackReader io.Reader
+	overrides      *ConfigOverrides    //用于覆盖config字段中的内容
+	fallbackReader io.Reader           //输入数据
 	configAccess   ConfigAccess
 	// promptedCredentials store the credentials input by the user
 	promptedCredentials promptedCredentials
 }
 
 // NewDefaultClientConfig creates a DirectClientConfig using the config.CurrentContext as the context name
+//指定默认的配置加载规则
 func NewDefaultClientConfig(config clientcmdapi.Config, overrides *ConfigOverrides) ClientConfig {
 	return &DirectClientConfig{config, config.CurrentContext, overrides, nil, NewDefaultClientConfigLoadingRules(), promptedCredentials{}}
 }
 
 // NewNonInteractiveClientConfig creates a DirectClientConfig using the passed context name and does not have a fallback reader for auth information
+//通过configAcess指定了配置加载规则,注意这个配置加载规则基于默认配置加载规则的基础上,根据输入参数进行了修改
+//如--kubeconfig=指定了ExplictPath的值
 func NewNonInteractiveClientConfig(config clientcmdapi.Config, contextName string, overrides *ConfigOverrides, configAccess ConfigAccess) ClientConfig {
 	return &DirectClientConfig{config, contextName, overrides, nil, configAccess, promptedCredentials{}}
 }
 
 // NewInteractiveClientConfig creates a DirectClientConfig using the passed context name and a reader in case auth information is not provided via files or flags
+//通过configAccess指定了配置加载规则
 func NewInteractiveClientConfig(config clientcmdapi.Config, contextName string, overrides *ConfigOverrides, fallbackReader io.Reader, configAccess ConfigAccess) ClientConfig {
 	return &DirectClientConfig{config, contextName, overrides, fallbackReader, configAccess, promptedCredentials{}}
 }
@@ -400,11 +404,11 @@ func (config *DirectClientConfig) getContext() (clientcmdapi.Context, error) {
 
 // getAuthInfo returns the clientcmdapi.AuthInfo, or an error if a required auth info is not found.
 func (config *DirectClientConfig) getAuthInfo() (clientcmdapi.AuthInfo, error) {
-	authInfos := config.config.AuthInfos
+	authInfos := config.config.AuthInfos //配置中的授权信息
 	authInfoName, required := config.getAuthInfoName()
 
 	var mergedAuthInfo clientcmdapi.AuthInfo
-	if configAuthInfo, exists := authInfos[authInfoName]; exists {
+	if configAuthInfo, exists := authInfos[authInfoName]; exists { //合并重复项
 		mergo.Merge(&mergedAuthInfo, configAuthInfo)
 	} else if required {
 		return clientcmdapi.AuthInfo{}, fmt.Errorf("auth info %q does not exist", authInfoName)

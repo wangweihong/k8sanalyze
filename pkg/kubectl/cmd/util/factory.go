@@ -80,7 +80,7 @@ type DiscoveryClientFactory interface {
 }
 
 // ClientAccessFactory holds the first level of factory methods.
-// Generally provides discovery, negotiation, and no-dep calls.
+// Generally provides discovery, negotiation(协商), and no-dep calls.
 // TODO The polymorphic calls probably deserve their own interface.
 type ClientAccessFactory interface {
 	DiscoveryClientFactory
@@ -192,7 +192,7 @@ type ObjectMappingFactory interface {
 	// for working with arbitrary resources and is not guaranteed to point to a Kubernetes APIServer.
 	ClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error)
 	// Returns a RESTClient for working with Unstructured objects.
-	UnstructuredClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error)
+	UnstructuredClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error) //这个的作用?
 	// Returns a Describer for displaying the specified RESTMapping type or an error.
 	Describer(mapping *meta.RESTMapping) (kubectl.Describer, error)
 
@@ -257,9 +257,10 @@ func makeInterfacesFor(versionList []schema.GroupVersion) func(version schema.Gr
 	}
 }
 
+//实现了Factory接口
 type factory struct {
-	ClientAccessFactory
-	ObjectMappingFactory
+	ClientAccessFactory  //用于生成客户端证书?
+	ObjectMappingFactory //用于转换资源对象?
 	BuilderFactory
 }
 
@@ -267,10 +268,12 @@ type factory struct {
 // if optionalClientConfig is nil, then flags will be bound to a new clientcmd.ClientConfig.
 // if optionalClientConfig is not nil, then this factory will make use of it.
 //kubectl执行命名时,默认optioncalClientConfig为空
+//什么情况下optionalClientConfig不为空?设置了--kube-config的时候?
+//有其他调用会传递参数过来的(如fedoration)
 func NewFactory(optionalClientConfig clientcmd.ClientConfig) Factory {
-	clientAccessFactory := NewClientAccessFactory(optionalClientConfig)
-	objectMappingFactory := NewObjectMappingFactory(clientAccessFactory)
-	builderFactory := NewBuilderFactory(clientAccessFactory, objectMappingFactory)
+	clientAccessFactory := NewClientAccessFactory(optionalClientConfig)            //ring0Factory实现了这个
+	objectMappingFactory := NewObjectMappingFactory(clientAccessFactory)           //ring1Factory实现了这个
+	builderFactory := NewBuilderFactory(clientAccessFactory, objectMappingFactory) //ring2Factory实现了这个
 
 	return &factory{
 		ClientAccessFactory:  clientAccessFactory,

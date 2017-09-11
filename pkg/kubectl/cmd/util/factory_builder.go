@@ -29,6 +29,7 @@ import (
 	"k8s.io/kubernetes/pkg/runtime"
 )
 
+//实现了BuilderFactory
 type ring2Factory struct {
 	clientAccessFactory  ClientAccessFactory
 	objectMappingFactory ObjectMappingFactory

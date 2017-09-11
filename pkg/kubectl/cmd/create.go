@@ -56,6 +56,7 @@ func NewCmdCreate(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 		Short:   "Create a resource by filename or stdin",
 		Long:    create_long,
 		Example: create_example,
+		//命令执行时,真正进行处理的动作
 		Run: func(cmd *cobra.Command, args []string) {
 			//这里根据yaml文件创建资源的地方?
 			if cmdutil.IsFilenameEmpty(options.Filenames) {
@@ -64,6 +65,7 @@ func NewCmdCreate(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 				defaultRunFunc(cmd, args)
 				return
 			}
+			//检查命令的参数是否正确
 			cmdutil.CheckErr(ValidateArgs(cmd, args))
 			cmdutil.CheckErr(RunCreate(f, cmd, out, errOut, options))
 		},
@@ -71,6 +73,7 @@ func NewCmdCreate(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 
 	usage := "to use to create the resource"
 	cmdutil.AddFilenameOptionFlags(cmd, options, usage)
+	//??
 	cmd.MarkFlagRequired("filename")
 	cmdutil.AddValidateFlags(cmd)
 	cmdutil.AddPrinterFlags(cmd)
@@ -82,6 +85,7 @@ func NewCmdCreate(f cmdutil.Factory, out, errOut io.Writer) *cobra.Command {
 	cmdutil.AddInclude3rdPartyFlags(cmd)
 
 	// create subcommands
+	//添加子命令
 	cmd.AddCommand(NewCmdCreateNamespace(f, out))
 	cmd.AddCommand(NewCmdCreateQuota(f, out))
 	cmd.AddCommand(NewCmdCreateSecret(f, out, errOut))

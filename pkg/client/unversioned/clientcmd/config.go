@@ -31,9 +31,10 @@ import (
 )
 
 // ConfigAccess is used by subcommands and methods in this package to load and modify the appropriate config files
+//用于指定要修改配置时,修改哪个文件?
 type ConfigAccess interface {
 	// GetLoadingPrecedence returns the slice of files that should be used for loading and inspecting the config
-	GetLoadingPrecedence() []string
+	GetLoadingPrecedence() []string //加载文件的顺序表
 	// GetStartingConfig returns the config that subcommands should being operating against.  It may or may not be merged depending on loading rules
 	GetStartingConfig() (*clientcmdapi.Config, error)
 	// GetDefaultFilename returns the name of the file you should write into (create if necessary), if you're trying to create a new stanza as opposed to updating an existing one.
@@ -44,6 +45,7 @@ type ConfigAccess interface {
 	GetExplicitFile() string
 }
 
+//实现了ConfigAccess
 type PathOptions struct {
 	// GlobalFile is the full path to the file to load as the global (final) option
 	GlobalFile string
@@ -55,7 +57,7 @@ type PathOptions struct {
 	// GlobalFileSubpath is an optional value used for displaying help
 	GlobalFileSubpath string
 
-	LoadingRules *ClientConfigLoadingRules
+	LoadingRules *ClientConfigLoadingRules //客户端配置加载规则
 }
 
 func (o *PathOptions) GetEnvVarFiles() []string {
@@ -68,9 +70,11 @@ func (o *PathOptions) GetEnvVarFiles() []string {
 		return []string{}
 	}
 
+	//按照":"来分隔环境变量值
 	return filepath.SplitList(envVarValue)
 }
 
+//优先环境变量指定的文件,如果为空,则使用GlobalFile
 func (o *PathOptions) GetLoadingPrecedence() []string {
 	if envVarFiles := o.GetEnvVarFiles(); len(envVarFiles) > 0 {
 		return envVarFiles
@@ -79,11 +83,13 @@ func (o *PathOptions) GetLoadingPrecedence() []string {
 	return []string{o.GlobalFile}
 }
 
+//获取kubectl配置
 func (o *PathOptions) GetStartingConfig() (*clientcmdapi.Config, error) {
 	// don't mutate the original
 	loadingRules := *o.LoadingRules
-	loadingRules.Precedence = o.GetLoadingPrecedence()
+	loadingRules.Precedence = o.GetLoadingPrecedence() //配置加载顺序
 
+	//创建一个ClientConfigIntterface
 	clientConfig := NewNonInteractiveDeferredLoadingClientConfig(&loadingRules, &ConfigOverrides{})
 	rawConfig, err := clientConfig.RawConfig()
 	if os.IsNotExist(err) {
@@ -96,6 +102,7 @@ func (o *PathOptions) GetStartingConfig() (*clientcmdapi.Config, error) {
 	return &rawConfig, nil
 }
 
+//
 func (o *PathOptions) GetDefaultFilename() string {
 	if o.IsExplicitFile() {
 		return o.GetExplicitFile()
@@ -134,15 +141,15 @@ func (o *PathOptions) GetExplicitFile() string {
 
 func NewDefaultPathOptions() *PathOptions {
 	ret := &PathOptions{
-		GlobalFile:       RecommendedHomeFile,
-		EnvVar:           RecommendedConfigPathEnvVar,
-		ExplicitFileFlag: RecommendedConfigPathFlag,
+		GlobalFile:       RecommendedHomeFile,         //$HOME/.kube/config
+		EnvVar:           RecommendedConfigPathEnvVar, //KUBECONFIG
+		ExplicitFileFlag: RecommendedConfigPathFlag,   //kubeconfig标志
 
-		GlobalFileSubpath: path.Join(RecommendedHomeDir, RecommendedFileName),
+		GlobalFileSubpath: path.Join(RecommendedHomeDir, RecommendedFileName), //.kube/config
 
-		LoadingRules: NewDefaultClientConfigLoadingRules(),
+		LoadingRules: NewDefaultClientConfigLoadingRules(), //指定默认的配置文件加载规则
 	}
-	ret.LoadingRules.DoNotResolvePaths = true
+	ret.LoadingRules.DoNotResolvePaths = true //不进行路径解析
 
 	return ret
 }

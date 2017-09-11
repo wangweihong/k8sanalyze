@@ -141,17 +141,18 @@ type RESTScope interface {
 
 // RESTMapping contains the information needed to deal with objects of a specific
 // resource and kind in a RESTful manner.
+//见k8s.io/kubernetes/pkg/kubectl/resource/helper.go使用RESTMapping来创建资源
 type RESTMapping struct {
 	// Resource is a string representing the name of this resource as a REST client would see it
-	Resource string
+	Resource string //资源的名字
 
-	GroupVersionKind schema.GroupVersionKind
+	GroupVersionKind schema.GroupVersionKind //api组版本,对象类型
 
 	// Scope contains the information needed to deal with REST Resources that are in a resource hierarchy
-	Scope RESTScope
+	Scope RESTScope //??作用域
 
-	runtime.ObjectConvertor
-	MetadataAccessor
+	runtime.ObjectConvertor //转换对象成不同版本??
+	MetadataAccessor        //直接处理k8s资源对象字段的interface
 }
 
 // RESTMapper allows clients to map resources to kind, and map kind and version

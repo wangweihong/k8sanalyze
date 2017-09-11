@@ -110,9 +110,12 @@ func NegotiateVersion(client DiscoveryInterface, requiredGV *schema.GroupVersion
 }
 
 // GroupVersionResources converts APIResourceLists to the GroupVersionResources.
+//解析资源列表,生成以{apigroup-apiversion-resouceName}的map
 func GroupVersionResources(rls []*metav1.APIResourceList) (map[schema.GroupVersionResource]struct{}, error) {
 	gvrs := map[schema.GroupVersionResource]struct{}{}
+	//遍历resource list
 	for _, rl := range rls {
+		//解析resrouce的GroupVersion得到apigroup和apiversion
 		gv, err := schema.ParseGroupVersion(rl.GroupVersion)
 		if err != nil {
 			return nil, err

@@ -41,20 +41,24 @@ const OldestVersion = "v1"
 var Versions = []string{"v1"}
 
 var (
-	Codec  runtime.Codec
+	Codec  runtime.Codec //包含编码器和解码器
 	Scheme *runtime.Scheme
 )
 
 func init() {
+	//创建一个新的schema对象
 	Scheme = runtime.NewScheme()
+	//注册到api.schema列表中
 	if err := api.AddToScheme(Scheme); err != nil {
 		// Programmer error, detect immediately
 		panic(err)
 	}
+	//注册到v1.schema列表中
 	if err := v1.AddToScheme(Scheme); err != nil {
 		// Programmer error, detect immediately
 		panic(err)
 	}
+	//序列化工具?
 	yamlSerializer := json.NewYAMLSerializer(json.DefaultMetaFactory, Scheme, Scheme)
 	Codec = versioning.NewDefaultingCodecForScheme(
 		Scheme,

@@ -84,7 +84,9 @@ type Info struct {
 	// Optional, this is the provided object in a versioned type before defaulting
 	// and conversions into its corresponding internal type. This is useful for
 	// reflecting on user intent which may be lost after defaulting and conversions.
-	VersionedObject runtime.Object
+	VersionedObject runtime.Object //这里包含着resource通过map[string]interface{}解析后的值
+	//&Pod{ObjectMeta:ObjectMeta{Name:nginx,GenerateName:,Namespace:,SelfLink:,UID:,ResourceVersion:,Generation:0,CreationTimestamp:0001-01-01 00:00:00 +0000 UTC,DeletionTimestamp:<nil>,DeletionGracePeriodSeconds:nil,Labels:map[string]string{},Annotations:map[string]string{},OwnerReferences:[],Finalizers:[],ClusterName:,},Spec:PodSpec{Volumes:[],Containers:[{nginx-test nginx:1.7.9 [] []  [{ 0 80  }] [] [] {map[] map[]} [] nil nil nil   nil false false false}],RestartPolicy:,TerminationGracePeriodSeconds:nil,ActiveDeadlineSeconds:nil,DNSPolicy:,NodeSelector:map[string]string{},ServiceAccountName:,DeprecatedServiceAccount:,NodeName:,HostNetwork:false,HostPID:false,HostIPC:false,SecurityContext:nil,ImagePullSecrets:[],Hostname:,Subdomain:,Affinity:nil,},Status:PodStatus{Phase:,Conditions:[],Message:,Reason:,HostIP:,PodIP:,StartTime:<nil>,ContainerStatuses:[],QOSClass:,},}
+
 	// Optional, this is the most recent value returned by the server if available
 	Object runtime.Object
 	// Optional, this is the most recent resource version the server knows about for

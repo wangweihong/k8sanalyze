@@ -53,20 +53,22 @@ import (
 	"k8s.io/kubernetes/pkg/util/homedir"
 )
 
+//实现了ClientAccessFactory接口
 type ring0Factory struct {
 	flags            *pflag.FlagSet
-	clientConfig     clientcmd.ClientConfig
-	discoveryFactory DiscoveryClientFactory
-	clientCache      *ClientCache
+	clientConfig     clientcmd.ClientConfig //客户端配置
+	discoveryFactory DiscoveryClientFactory // discoveryFactory实现该接口
+	clientCache      *ClientCache           //???
 }
 
+//这里创建了ring0Factory对象
 func NewClientAccessFactory(optionalClientConfig clientcmd.ClientConfig) ClientAccessFactory {
 	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
 
 	clientConfig := optionalClientConfig
 	//使用默认的客户端配置
 	if optionalClientConfig == nil {
-		clientConfig = DefaultClientConfig(flags) //根据参数,环境变量生成交互型客户端配置
+		clientConfig = DefaultClientConfig(flags) //根据参数,环境变量生成kubectl的配置
 	}
 
 	return NewClientAccessFactoryFromDiscovery(flags, clientConfig, &discoveryFactory{clientConfig: clientConfig})
@@ -75,10 +77,12 @@ func NewClientAccessFactory(optionalClientConfig clientcmd.ClientConfig) ClientA
 // NewClientAccessFactoryFromDiscovery allows an external caller to substitute a different discoveryFactory
 // Which allows for the client cache to be built in ring0, but still rely on a custom discovery client
 func NewClientAccessFactoryFromDiscovery(flags *pflag.FlagSet, clientConfig clientcmd.ClientConfig, discoveryFactory DiscoveryClientFactory) ClientAccessFactory {
+	//将标志位包含_的更改成-
 	flags.SetNormalizeFunc(utilflag.WarnWordSepNormalizeFunc) // Warn for "_" flags
 
 	clientCache := NewClientCache(clientConfig, discoveryFactory)
 
+	//该对象实现了ClientAccessFactory
 	f := &ring0Factory{
 		flags:            flags,
 		clientConfig:     clientConfig,
@@ -89,11 +93,12 @@ func NewClientAccessFactoryFromDiscovery(flags *pflag.FlagSet, clientConfig clie
 	return f
 }
 
-//服务发现客户端?
+//这个实现了DiscoveryClientFactory
 type discoveryFactory struct {
 	clientConfig clientcmd.ClientConfig //客户端配置接口
 }
 
+//生成缓存的discovery interface
 func (f *discoveryFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
 	cfg, err := f.clientConfig.ClientConfig() //生成客户端的配置
 	if err != nil {
@@ -147,24 +152,32 @@ func (f *discoveryFactory) DiscoveryClient() (discovery.CachedDiscoveryInterface
 //     The env vars KUBERNETES_SERVICE_HOST and KUBERNETES_SERVICE_PORT are
 //     set, and the file /var/run/secrets/kubernetes.io/serviceaccount/token
 //     exists and is not a directory.
+//根据--kubeconfig参数,$KUBECONFIG以及$HOME/.kube/config三格途径最终生成客户端配置
+//这里需要注意的是如果是编写第三方程序调用了DefaultClientConfig的话, 同样会受到$KUBECONFIG的影响
+//但不受--kubeconfig标志的影响
 func DefaultClientConfig(flags *pflag.FlagSet) clientcmd.ClientConfig {
 	//获取默认的配置文件的加载规则
 	//loadingRules:指定了客户端配置文件路径 优先从$KUBECONFIG获取,其次$Home/.kube/config
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	// use the standard defaults for this client command
 	// DEPRECATED: remove and replace with something more accurate
+	//更改加载规则的内容
 	loadingRules.DefaultClientConfig = &clientcmd.DefaultClientConfig //创建一个默认的客户端配置(master:localhost8080)
 
-	//根据参数更改客户端配置文件
+	//根据参数更改客户端配置文件路径.这个参数是由--kubeconfig传递过来额.现在因为没有调用flag.Parse(),所以得到的值仍然是默认值
+	//flag.Parse()解析后才是参数传递过来的值
+	//更爱加载规则中的显示路径
 	flags.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests.")
 
-	//默认master
+	//kubectl客户端配置,并设置默认集群
 	overrides := &clientcmd.ConfigOverrides{ClusterDefaults: clientcmd.ClusterDefaults}
 
+	//标志解析,auth/context/cluster相关
 	flagNames := clientcmd.RecommendedConfigOverrideFlags("")
 	// short flagnames are disabled by default.  These are here for compatibility with existing scripts
 	flagNames.ClusterOverrideFlags.APIServer.ShortName = "s"
 
+	//绑定标志到特定的kubectl客户端配置中
 	clientcmd.BindOverrideFlags(overrides, flags, flagNames)
 	//交互型客户端配置
 	clientConfig := clientcmd.NewInteractiveDeferredLoadingClientConfig(loadingRules, overrides, os.Stdin)
@@ -211,6 +224,7 @@ func (f *ring0Factory) FederationClientForVersion(version *schema.GroupVersion) 
 	return f.clientCache.FederationClientForVersion(version)
 }
 
+//获得解析yaml资源的解码器?
 func (f *ring0Factory) Decoder(toInternal bool) runtime.Decoder {
 	var decoder runtime.Decoder
 	if toInternal {
@@ -225,6 +239,7 @@ func (f *ring0Factory) JSONEncoder() runtime.Encoder {
 	return api.Codecs.LegacyCodec(registered.EnabledVersions()...)
 }
 
+//没有被调用
 func (f *ring0Factory) UpdatePodSpecForObject(obj runtime.Object, fn func(*api.PodSpec) error) (bool, error) {
 	// TODO: replace with a swagger schema based approach (identify pod template via schema introspection)
 	switch t := obj.(type) {

@@ -51,6 +51,7 @@ import (
 	"k8s.io/kubernetes/pkg/runtime/schema"
 )
 
+//实现了ObjectMappingFactory
 type ring1Factory struct {
 	clientAccessFactory ClientAccessFactory
 }
@@ -94,7 +95,9 @@ func (f *ring1Factory) UnstructuredObject() (meta.RESTMapper, runtime.ObjectType
 	if err != nil {
 		return nil, nil, err
 	}
+	//获取apiserver的apigroups以及其中apiversion对应的resource
 	groupResources, err := discovery.GetAPIGroupResources(discoveryClient)
+	//???和$HOME/.kube/cache/discovery中的缓存文件有关
 	if err != nil && !discoveryClient.Fresh() {
 		discoveryClient.Invalidate()
 		groupResources, err = discovery.GetAPIGroupResources(discoveryClient)
@@ -103,7 +106,9 @@ func (f *ring1Factory) UnstructuredObject() (meta.RESTMapper, runtime.ObjectType
 		return nil, nil, err
 	}
 
+	//??
 	mapper := discovery.NewDeferredDiscoveryRESTMapper(discoveryClient, meta.InterfacesForUnstructured)
+	//记录注册的的apigroup-apiversion-resourceking, typer的key为{apigroup-apiversion-resourcekind}
 	typer := discovery.NewUnstructuredObjectTyper(groupResources)
 	return NewShortcutExpander(mapper, discoveryClient), typer, nil
 }

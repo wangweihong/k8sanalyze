@@ -307,6 +307,7 @@ func NewKubectlCommand(f cmdutil.Factory, in io.Reader, out, err io.Writer) *cob
 	}
 	groups.Add(cmds)
 
+	//提示kubectl stop命名已经由kubectl delete命令替代了
 	filters := []string{
 		"options",
 		Deprecated("kubectl", "delete", cmds, NewCmdStop(f, out)),

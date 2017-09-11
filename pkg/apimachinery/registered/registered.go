@@ -32,6 +32,7 @@ import (
 )
 
 var (
+	//这个环境变量指定的KUBE_API_VERSIONS有何作用
 	DefaultAPIRegistrationManager = NewOrDie(os.Getenv("KUBE_API_VERSIONS"))
 )
 
@@ -43,9 +44,10 @@ var (
 // are switched to using the announce package instead of this package, then we
 // can combine the registered/enabled concepts in this object. Simplifying this
 // isn't easy right now because there are so many callers of this package.
+//管理启动的API组
 type APIRegistrationManager struct {
 	// registeredGroupVersions stores all API group versions for which RegisterGroup is called.
-	registeredVersions map[schema.GroupVersion]struct{}
+	registeredVersions map[schema.GroupVersion]struct{} //已注册的api组版本
 
 	// thirdPartyGroupVersions are API versions which are dynamically
 	// registered (and unregistered) via API calls to the apiserver
@@ -63,12 +65,14 @@ type APIRegistrationManager struct {
 	// KUBE_API_VERSIONS environment variable. The install package of each group
 	// checks this list before add their versions to the latest package and
 	// Scheme.  This list is small and order matters, so represent as a slice
-	envRequestedVersions []schema.GroupVersion
+	envRequestedVersions []schema.GroupVersion //KUBE_API_VERSIONS中指定的版本
 }
 
 // NewAPIRegistrationManager constructs a new manager. The argument ought to be
 // the value of the KUBE_API_VERSIONS env var, or a value of this which you
 // wish to test.
+//创建一个新的api注册管理器,
+//只被NewOrDie()调用kubeAPiVersion
 func NewAPIRegistrationManager(kubeAPIVersions string) (*APIRegistrationManager, error) {
 	m := &APIRegistrationManager{
 		registeredVersions:      map[schema.GroupVersion]struct{}{},
@@ -78,19 +82,31 @@ func NewAPIRegistrationManager(kubeAPIVersions string) (*APIRegistrationManager,
 		envRequestedVersions:    []schema.GroupVersion{},
 	}
 
+	//指定了api版本集
 	if len(kubeAPIVersions) != 0 {
 		for _, version := range strings.Split(kubeAPIVersions, ",") {
+			//解析组版本
 			gv, err := schema.ParseGroupVersion(version)
 			if err != nil {
 				return nil, fmt.Errorf("invalid api version: %s in KUBE_API_VERSIONS: %s.",
 					version, kubeAPIVersions)
 			}
+			//
 			m.envRequestedVersions = append(m.envRequestedVersions, gv)
 		}
 	}
 	return m, nil
 }
 
+/* 测试指定一个不存在的版本,panic
+wwh@wwh:~/kiongf/go/src/k8s.io/kubernetes$ kubectl get version
+panic: KUBE_API_VERSIONS contains versions that are not installed: ["v2"].
+
+goroutine 1 [running]:
+k8s.io/kubernetes/pkg/client/clientset_generated/clientset.init.1()
+	/go/src/k8s.io/kubernetes/_output/dockerized/go/src/k8s.io/kubernetes/pkg/client/clientset_generated/clientset/import_known_versions.go:40 +0x119
+	k8s.io/kubernetes/pkg/client/clientset_generated/clientset.init()
+*/
 func NewOrDie(kubeAPIVersions string) *APIRegistrationManager {
 	m, err := NewAPIRegistrationManager(kubeAPIVersions)
 	if err != nil {

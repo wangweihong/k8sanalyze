@@ -30,11 +30,12 @@ import (
 
 // APIGroupResources is an API group with a mapping of versions to
 // resources.
+//描述api组属性,以及api组各版本支持的资源
 type APIGroupResources struct {
-	Group metav1.APIGroup
+	Group metav1.APIGroup //api组属性
 	// A mapping of version string to a slice of APIResources for
 	// that version.
-	VersionedResources map[string][]metav1.APIResource
+	VersionedResources map[string][]metav1.APIResource //api组版本支持的k8s资源
 }
 
 // NewRESTMapper returns a PriorityRESTMapper based on the discovered
@@ -112,7 +113,19 @@ func NewRESTMapper(groupResources []*APIGroupResources, versionInterfaces meta.V
 
 // GetAPIGroupResources uses the provided discovery client to gather
 // discovery information and populate a slice of APIGroupResources.
+// 获取服务器api组版本以及对应额资源
+/* 参考以下代码编写的测试程序获取的部分测试数据
+[apigroup]apiregistration.k8s.io:
+	[groupVersion] apiregistration.k8s.io/v1beta1
+		[resource] APIService apiservices
+		[resource] APIService apiservices/status
+[apigroup]extensions:
+	[groupVersion] extensions/v1beta1
+		[resource] DaemonSet daemonsets
+		[resource] DaemonSet daemonsets/status
+*/
 func GetAPIGroupResources(cl DiscoveryInterface) ([]*APIGroupResources, error) {
+	//获得服务器支持的api组,以及各版本支持的资源
 	apiGroups, err := cl.ServerGroups()
 	if err != nil {
 		return nil, err
@@ -141,9 +154,11 @@ func GetAPIGroupResources(cl DiscoveryInterface) ([]*APIGroupResources, error) {
 // DeferredDiscoveryRESTMapper is a RESTMapper that will defer
 // initialization of the RESTMapper until the first mapping is
 // requested.
+//实现了meta.RestMapper interface.具体是有delegate来提供实现.
+//这个结构体只是提供delegate字段的创建方法
 type DeferredDiscoveryRESTMapper struct {
 	initMu           sync.Mutex
-	delegate         meta.RESTMapper
+	delegate         meta.RESTMapper //创建是为null,在真正调用时通过getDelegate()来创建
 	cl               CachedDiscoveryInterface
 	versionInterface meta.VersionInterfacesFunc
 }

@@ -28,6 +28,8 @@ import (
 
 // Helper provides methods for retrieving or mutating a RESTful
 // resource.
+//提供方法来检索和改变RESTful资源
+//提供方法去向apiserver创建,删除,更新资
 type Helper struct {
 	// The name of this resource as the server would recognize it
 	Resource string
@@ -37,7 +39,7 @@ type Helper struct {
 	// type.
 	Versioner runtime.ResourceVersioner
 	// True if the resource type is scoped to namespaces
-	NamespaceScoped bool
+	NamespaceScoped bool //命名空间作用域?
 }
 
 // NewHelper creates a Helper from a ResourceMapping
@@ -102,6 +104,7 @@ func (m *Helper) Delete(namespace, name string) error {
 		Error()
 }
 
+//创建K8s资源
 func (m *Helper) Create(namespace string, modify bool, obj runtime.Object) (runtime.Object, error) {
 	if modify {
 		// Attempt to version the object based on client logic.
@@ -110,6 +113,7 @@ func (m *Helper) Create(namespace string, modify bool, obj runtime.Object) (runt
 			// We don't know how to clear the version on this object, so send it to the server as is
 			return m.createResource(m.RESTClient, m.Resource, namespace, obj)
 		}
+		//清空资源的版本号
 		if version != "" {
 			if err := m.Versioner.SetResourceVersion(obj, ""); err != nil {
 				return nil, err
@@ -133,10 +137,12 @@ func (m *Helper) Patch(namespace, name string, pt api.PatchType, data []byte) (r
 		Get()
 }
 
+//对资源进行更新管理(deployment -> rolling update )
 func (m *Helper) Replace(namespace, name string, overwrite bool, obj runtime.Object) (runtime.Object, error) {
 	c := m.RESTClient
 
 	// Attempt to version the object based on client logic.
+	//获得已有资源的版本号,更新该版本资源
 	version, err := m.Versioner.ResourceVersion(obj)
 	if err != nil {
 		// We don't know how to version this object, so send it to the server as is

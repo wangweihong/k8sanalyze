@@ -30,12 +30,15 @@ import (
 )
 
 //这个缓存的意义是什么?
+//猜测,在不同的服务器版本中,有些资源的api组版本已经更改
+//例如在1.5版本中Job资源还可通过clientset.Interface().BatchV2alpha1.*来操作资源
+//但在1.7版本中,必须使用clientset.Interface().BatchV1来操作资源,否则会报resource not found.
 func NewClientCache(loader clientcmd.ClientConfig, discoveryClientFactory DiscoveryClientFactory) *ClientCache {
 	return &ClientCache{
 		clientsets:             make(map[schema.GroupVersion]*internalclientset.Clientset), //不同api组版本的客户端
 		configs:                make(map[schema.GroupVersion]*restclient.Config),           //不同api组版本的客户端配置
 		fedClientSets:          make(map[schema.GroupVersion]fedclientset.Interface),       //不同api组版本的联邦客户端接口?
-		loader:                 loader,                                                     //?
+		loader:                 loader,                                                     //客户端配置文件处理
 		discoveryClientFactory: discoveryClientFactory,
 	}
 }
@@ -43,7 +46,7 @@ func NewClientCache(loader clientcmd.ClientConfig, discoveryClientFactory Discov
 // ClientCache caches previously loaded clients for reuse, and ensures MatchServerVersion
 // is invoked only once
 type ClientCache struct {
-	loader        clientcmd.ClientConfig
+	loader        clientcmd.ClientConfig                               //
 	clientsets    map[schema.GroupVersion]*internalclientset.Clientset //不同api组版本有不同的客户端接口?
 	fedClientSets map[schema.GroupVersion]fedclientset.Interface
 	configs       map[schema.GroupVersion]*restclient.Config

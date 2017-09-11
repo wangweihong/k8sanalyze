@@ -70,10 +70,19 @@ func ParseGroupResource(gr string) GroupResource {
 
 // GroupVersionResource unambiguously identifies a resource.  It doesn't anonymously include GroupVersion
 // to avoid automatic coercion.  It doesn't use a GroupVersion to avoid custom marshalling
+/*
+  Pod是resourcekind, pods/exec等是resource name
+	[resource] Pod pods/exec
+	[resource] Pod pods/log
+	[resource] Pod pods/portforward
+	[resource] Pod pods/proxy
+	[resource] Pod pods/status
+
+*/
 type GroupVersionResource struct {
 	Group    string
 	Version  string
-	Resource string
+	Resource string //资源名,特别注意name和Kind是不同的.
 }
 
 func (gvr GroupVersionResource) Empty() bool {
@@ -116,11 +125,18 @@ func (gk *GroupKind) String() string {
 
 // GroupVersionKind unambiguously identifies a kind.  It doesn't anonymously include GroupVersion
 // to avoid automatic coercion.  It doesn't use a GroupVersion to avoid custom marshalling
-
+/*
+  Pod是resourcekind, pods/exec等是resource name
+	[resource] Pod pods/exec
+	[resource] Pod pods/log
+	[resource] Pod pods/portforward
+	[resource] Pod pods/proxy
+	[resource] Pod pods/status
+*/
 type GroupVersionKind struct {
 	Group   string //api组
 	Version string //api版本
-	Kind    string //对象类型
+	Kind    string //resource类型(例如Pod),注意和GroupVersionResource的区别
 }
 
 // Empty returns true if group, version, and kind are empty
@@ -143,7 +159,7 @@ func (gvk GroupVersionKind) String() string {
 // GroupVersion contains the "group" and the "version", which uniquely identifies the API.
 type GroupVersion struct {
 	Group   string //api 组
-	Version string //版本
+	Version string //api版本
 }
 
 // Empty returns true if group and version are empty

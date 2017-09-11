@@ -31,12 +31,16 @@ import (
 // the most recent rules are used.  This is useful in cases where you bind flags to loading rule parameters before
 // the parse happens and you want your calling code to be ignorant of how the values are being mutated to avoid
 // passing extraneous information down a call stack
+//注意DeferredLoadingClientConfig实现了ClientConfig interface,其中字段clientConfig也是ClientConfig interface.
+//DeferredLoadingClientConfig所有的ClientConfig的实现都是由clientConfig来完成, 如果在调用ClientConfig方法时,clientConfig为nil,则DeferredLoadingClientConfig将会
+//根据loader/overrides来创建clientConfig.见DeferredLoadingClientConfig.createClientConfig()
+//也即是说这个结构体只是如何生成真正的ClientAccess的实现对象DirectClientConfig
 type DeferredLoadingClientConfig struct {
-	loader         ClientConfigLoader
-	overrides      *ConfigOverrides // 配置可覆盖项??
+	loader         ClientConfigLoader //客户端配置加载规则
+	overrides      *ConfigOverrides   // 配置覆盖项
 	fallbackReader io.Reader
 
-	clientConfig ClientConfig // 客户端配置生成接口
+	clientConfig ClientConfig // 客户端配置生成接口,实现为k8s.io/kubernetes/pkg/client/unversioned/clientcmd/client_config.go的DirectClientConfig
 	loadingLock  sync.Mutex
 
 	// provided for testing
@@ -55,22 +59,28 @@ func NewNonInteractiveDeferredLoadingClientConfig(loader ClientConfigLoader, ove
 }
 
 // NewInteractiveDeferredLoadingClientConfig creates a ConfigClientClientConfig using the passed context name and the fallback auth reader
+//生成ClientConfig,这时候的DeferredLoadingClientConfig还不具备真正的ClientConfig实现,只有调用ClientConfig中的方法时,才会生成真正的实现
+//注意icc只是测试使用
 func NewInteractiveDeferredLoadingClientConfig(loader ClientConfigLoader, overrides *ConfigOverrides, fallbackReader io.Reader) ClientConfig {
 	return &DeferredLoadingClientConfig{loader: loader, overrides: overrides, icc: &inClusterClientConfig{overrides: overrides}, fallbackReader: fallbackReader}
 }
 
+//生成真正的ClientConfig
 func (config *DeferredLoadingClientConfig) createClientConfig() (ClientConfig, error) {
 	if config.clientConfig == nil {
 		config.loadingLock.Lock()
 		defer config.loadingLock.Unlock()
 
+		//生成ClientConfig
 		if config.clientConfig == nil {
+			//按照配置加载规则加载配置文件,注意这时候还没有处理配置项覆盖等问题
 			mergedConfig, err := config.loader.Load()
 			if err != nil {
 				return nil, err
 			}
 
 			var mergedClientConfig ClientConfig
+			//根据是否有stdin,决定创建何种客户端配置
 			if config.fallbackReader != nil {
 				mergedClientConfig = NewInteractiveClientConfig(*mergedConfig, config.overrides.CurrentContext, config.overrides, config.fallbackReader, config.loader)
 			} else {

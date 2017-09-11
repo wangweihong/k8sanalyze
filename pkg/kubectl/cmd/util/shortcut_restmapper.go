@@ -29,7 +29,7 @@ import (
 type ShortcutExpander struct {
 	RESTMapper meta.RESTMapper
 
-	All []schema.GroupResource
+	All []schema.GroupResource //apigroup/resource数组,默认是userResources
 
 	discoveryClient discovery.DiscoveryInterface
 }
@@ -40,22 +40,28 @@ func NewShortcutExpander(delegate meta.RESTMapper, client discovery.DiscoveryInt
 	return ShortcutExpander{All: userResources, RESTMapper: delegate, discoveryClient: client}
 }
 
+//找到userResources中的apigroup-resource中所有匹配apiserver支持的apigroup-resources
+//如果出错,则返回userResources
 func (e ShortcutExpander) getAll() []schema.GroupResource {
+	//返回默认的group/resource
 	if e.discoveryClient == nil {
 		return e.All
 	}
 
 	// Check if we have access to server resources
+	// 获取server支持的所有的resouces
 	apiResources, err := e.discoveryClient.ServerResources()
 	if err != nil {
 		return e.All
 	}
 
+	//解析资源列表,生成以{apigroup-apiversion-resouceName}的map
 	availableResources, err := discovery.GroupVersionResources(apiResources)
 	if err != nil {
 		return e.All
 	}
 
+	//找到userResources中的apigroup-resource中所有匹配apiserver支持的apigroup-resources
 	availableAll := []schema.GroupResource{}
 	for _, requestedResource := range e.All {
 		for availableResource := range availableResources {

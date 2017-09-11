@@ -25,15 +25,19 @@ import (
 
 // UnstructuredObjectTyper provides a runtime.ObjectTyper implmentation for
 // runtime.Unstructured object based on discovery information.
+//记录支持的apigroup-apiversion-resourceking
 type UnstructuredObjectTyper struct {
-	registered map[schema.GroupVersionKind]bool
+	registered map[schema.GroupVersionKind]bool //key为包含{apigroup,apiversion,resourcekind}
 }
 
 // NewUnstructuredObjectTyper returns a runtime.ObjectTyper for
 // unstructred objects based on discovery information.
 func NewUnstructuredObjectTyper(groupResources []*APIGroupResources) *UnstructuredObjectTyper {
 	dot := &UnstructuredObjectTyper{registered: make(map[schema.GroupVersionKind]bool)}
+	//遍历所有apigroup资源
+	//过滤掉apigroups中,没有包含资源的apiversion.
 	for _, group := range groupResources {
+		//如果apigroup支持的api version中不包含有相应的资源表,则忽略
 		for _, discoveryVersion := range group.Group.Versions {
 			resources, ok := group.VersionedResources[discoveryVersion.Version]
 			if !ok {
@@ -41,6 +45,7 @@ func NewUnstructuredObjectTyper(groupResources []*APIGroupResources) *Unstructur
 			}
 
 			gv := schema.GroupVersion{Group: group.Group.Name, Version: discoveryVersion.Version}
+			//以{apigroup,apiversion,resourcekind}记录支持的resource信息
 			for _, resource := range resources {
 				dot.registered[gv.WithKind(resource.Kind)] = true
 			}
