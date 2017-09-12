@@ -65,7 +65,9 @@ func NewObjectMappingFactory(clientAccessFactory ClientAccessFactory) ObjectMapp
 }
 
 func (f *ring1Factory) Object() (meta.RESTMapper, runtime.ObjectTyper) {
+	//获得所有已注册的转换器
 	mapper := registered.RESTMapper()
+	//
 	discoveryClient, err := f.clientAccessFactory.DiscoveryClient()
 	if err == nil {
 		mapper = meta.FirstHitRESTMapper{
@@ -106,7 +108,7 @@ func (f *ring1Factory) UnstructuredObject() (meta.RESTMapper, runtime.ObjectType
 		return nil, nil, err
 	}
 
-	//??
+	//创建一个未真正初始化的RESTMapper
 	mapper := discovery.NewDeferredDiscoveryRESTMapper(discoveryClient, meta.InterfacesForUnstructured)
 	//记录注册的的apigroup-apiversion-resourceking, typer的key为{apigroup-apiversion-resourcekind}
 	typer := discovery.NewUnstructuredObjectTyper(groupResources)

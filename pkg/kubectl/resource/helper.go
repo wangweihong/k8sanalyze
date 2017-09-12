@@ -32,7 +32,7 @@ import (
 //提供方法去向apiserver创建,删除,更新资
 type Helper struct {
 	// The name of this resource as the server would recognize it
-	Resource string
+	Resource string //k8s resource名(不是资源类型(resource kind,如Pod),而是pods/exec,pods/log这些???
 	// A RESTClient capable of mutating this resource.
 	RESTClient RESTClient
 	// An interface for reading or writing the resource version of this

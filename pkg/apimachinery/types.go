@@ -25,12 +25,15 @@ import (
 )
 
 // GroupMeta stores the metadata of a group.
+//见k8s.io/kubernetes/pkg/apimachinery/registered/registered.go的APIRegistrationManager的注释
+//初始化见
+//k8s.io/kubernetes/pkg/api/install/install.go
 type GroupMeta struct {
 	// GroupVersion represents the preferred version of the group.
-	GroupVersion schema.GroupVersion
+	GroupVersion schema.GroupVersion //api组首选的版本号/默认版本号
 
 	// GroupVersions is Group + all versions in that group.
-	GroupVersions []schema.GroupVersion
+	GroupVersions []schema.GroupVersion //api组中所有的版本号
 
 	// SelfLinker can set or get the SelfLink field of all API types.
 	// TODO: when versioning changes, make this part of each API definition.

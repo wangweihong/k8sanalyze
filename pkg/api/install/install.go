@@ -38,9 +38,11 @@ const importPrefix = "k8s.io/kubernetes/pkg/api"
 var accessor = meta.NewAccessor()
 
 // availableVersions lists all known external versions for this group from most preferred to least preferred
+//apigroup可以用的版本
 var availableVersions = []schema.GroupVersion{v1.SchemeGroupVersion}
 
 func init() {
+	//注册apigroup到k8s.io/kubernetes/pkg/apimachinery/registered/registered.go 的DefaultAPIRegistrationManager
 	registered.RegisterVersions(availableVersions)
 	externalVersions := []schema.GroupVersion{}
 	for _, v := range availableVersions {
@@ -72,7 +74,7 @@ func enableVersions(externalVersions []schema.GroupVersion) error {
 	preferredExternalVersion := externalVersions[0]
 
 	groupMeta := apimachinery.GroupMeta{
-		GroupVersion:  preferredExternalVersion,
+		GroupVersion:  preferredExternalVersion, //默认的版本
 		GroupVersions: externalVersions,
 		RESTMapper:    newRESTMapper(externalVersions),
 		SelfLinker:    runtime.SelfLinker(accessor),
@@ -88,6 +90,8 @@ func enableVersions(externalVersions []schema.GroupVersion) error {
 func newRESTMapper(externalVersions []schema.GroupVersion) meta.RESTMapper {
 	// the list of kinds that are scoped at the root of the api hierarchy
 	// if a kind is not enumerated here, it is assumed to have a namespace scope
+	// 这些是API最顶层的对象，可以理解为没有namespace的对象
+	// 根据有无namespace，对象分为两类：RESTScopeNamespace和RESTScopeRoot
 	rootScoped := sets.NewString(
 		"Node",
 		"Namespace",

@@ -33,6 +33,8 @@ import (
 
 var (
 	//这个环境变量指定的KUBE_API_VERSIONS有何作用
+	//KUBE_API_VERSIONS是一个","分隔的数组
+	//如果没有指定KUBE_API_VERSIONS时,NewOrDie()只是返回初始化后的APIRegistrationManager
 	DefaultAPIRegistrationManager = NewOrDie(os.Getenv("KUBE_API_VERSIONS"))
 )
 
@@ -45,20 +47,32 @@ var (
 // can combine the registered/enabled concepts in this object. Simplifying this
 // isn't easy right now because there are so many callers of this package.
 //管理启动的API组
+//将所有已经注册的，已经激活的，第三方的的GroupVersions进行了汇总，还包括了各个GroupVersion的GroupMeta(元数据)。
+//参考自http://dockone.io/article/2161
+/*
+k8s现阶段，API一共分为13个Group：Core、apps、authentication、authorization、autoscaling、batch、certificates、componentconfig、extensions、imagepolicy、policy、rbac、storage。其中Core的Group Name为空，它包含的API是最核心的API,如Pod、Service等，它的代码位于pkg/api下面，其它12个Group代码位于pkg/apis。每个目录下都有一个install目录，里面有一个install.go文件，接着通过init()负责初始化。
+所有的init()函数都会通过调用当前包的
+	registered.RegisterVersions(availableVersions)注册到DefaultRegistrationManager中.
+	如k8s.io/kubernetes/pkg/api/install/install.go
+*/
 type APIRegistrationManager struct {
 	// registeredGroupVersions stores all API group versions for which RegisterGroup is called.
 	registeredVersions map[schema.GroupVersion]struct{} //已注册的api组版本
 
 	// thirdPartyGroupVersions are API versions which are dynamically
 	// registered (and unregistered) via API calls to the apiserver
+	// 第三方注册的GroupVersions,这些都向apiServer动态注册的
 	thirdPartyGroupVersions []schema.GroupVersion
 
 	// enabledVersions represents all enabled API versions. It should be a
 	// subset of registeredVersions. Please call EnableVersions() to add
 	// enabled versions.
+	// 所有已经enable的GroupVersions，可以通过EnableVersions()将要enable的GroupVersion加入进来。
+	// 只有enable了，才能使用对应的GroupVersion
 	enabledVersions map[schema.GroupVersion]struct{}
 
 	// map of group meta for all groups.
+	//key为group名,所有api组的元数据
 	groupMetaMap map[string]*apimachinery.GroupMeta
 
 	// envRequestedVersions represents the versions requested via the
@@ -138,6 +152,7 @@ var (
 )
 
 // RegisterVersions adds the given group versions to the list of registered group versions.
+//获得所有已注册的apiGroupVersion
 func (m *APIRegistrationManager) RegisterVersions(availableVersions []schema.GroupVersion) {
 	for _, v := range availableVersions {
 		m.registeredVersions[v] = struct{}{}
@@ -224,6 +239,7 @@ func (m *APIRegistrationManager) EnabledVersionsForGroup(group string) []schema.
 
 // Group returns the metadata of a group if the group is registered, otherwise
 // an error is returned.
+//获得apigroup的元数据
 func (m *APIRegistrationManager) Group(group string) (*apimachinery.GroupMeta, error) {
 	groupMeta, found := m.groupMetaMap[group]
 	if !found {
@@ -255,6 +271,7 @@ func (m *APIRegistrationManager) RegisteredGroupVersions() []schema.GroupVersion
 }
 
 // IsThirdPartyAPIGroupVersion returns true if the api version is a user-registered group/version.
+//检测是否是第三方ApiGroupVersion
 func (m *APIRegistrationManager) IsThirdPartyAPIGroupVersion(gv schema.GroupVersion) bool {
 	for ix := range m.thirdPartyGroupVersions {
 		if m.thirdPartyGroupVersions[ix] == gv {
@@ -268,6 +285,7 @@ func (m *APIRegistrationManager) IsThirdPartyAPIGroupVersion(gv schema.GroupVers
 // registers them in the API machinery and enables them.
 // Skips GroupVersions that are already registered.
 // Returns the list of GroupVersions that were skipped.
+//添加第三方资源版本
 func (m *APIRegistrationManager) AddThirdPartyAPIGroupVersions(gvs ...schema.GroupVersion) []schema.GroupVersion {
 	filteredGVs := []schema.GroupVersion{}
 	skippedGVs := []schema.GroupVersion{}
@@ -320,9 +338,13 @@ func (m *APIRegistrationManager) GroupOrDie(group string) *apimachinery.GroupMet
 //     kube any version, extensions any version, metrics any version, all other groups alphabetical preferred version,
 //     all other groups alphabetical.
 func (m *APIRegistrationManager) RESTMapper(versionPatterns ...schema.GroupVersion) meta.RESTMapper {
+	//meta.RSETMapper数组
 	unionMapper := meta.MultiRESTMapper{}
 	unionedGroups := sets.NewString()
+
+	//检测api注册管理器启动了哪些api版本
 	for enabledVersion := range m.enabledVersions {
+		//插入为存在的group
 		if !unionedGroups.Has(enabledVersion.Group) {
 			unionedGroups.Insert(enabledVersion.Group)
 			groupMeta := m.groupMetaMap[enabledVersion.Group]
@@ -330,6 +352,7 @@ func (m *APIRegistrationManager) RESTMapper(versionPatterns ...schema.GroupVersi
 		}
 	}
 
+	//
 	if len(versionPatterns) != 0 {
 		resourcePriority := []schema.GroupVersionResource{}
 		kindPriority := []schema.GroupVersionKind{}

@@ -175,6 +175,8 @@ type ObjectVersioner interface {
 }
 
 // ObjectConvertor converts an object to a different version.
+//转换一个对象成另一个版本
+//猜测在k8s1.5中job在batch/v2alpha1,在k8s1.7中job在batch/v1,需要将旧版本进行转换
 type ObjectConvertor interface {
 	// Convert attempts to convert one object into another, or returns an error. This method does
 	// not guarantee the in object is not mutated. The context argument will be passed to
@@ -189,6 +191,7 @@ type ObjectConvertor interface {
 
 // ObjectTyper contains methods for extracting the APIVersion and Kind
 // of objects.
+//实现k8s.io/kubernetes/pkg/runtime.Schema
 type ObjectTyper interface {
 	// ObjectKinds returns the all possible group,version,kind of the provided object, true if
 	// the object is unversioned, or an error if the object is not recognized
@@ -214,6 +217,8 @@ type ObjectCopier interface {
 
 // ResourceVersioner provides methods for setting and retrieving
 // the resource version from an API object.
+//更新k8s resource object的resource version
+//所有k8s resource object都实现了Object interface
 type ResourceVersioner interface {
 	SetResourceVersion(obj Object, version string) error
 	ResourceVersion(obj Object) (string, error)
@@ -234,6 +239,10 @@ type SelfLinker interface {
 // expected to be serialized to the wire, the interface an Object must provide to the Scheme allows
 // serializers to set the kind, version, and group the object is represented as. An Object may choose
 // to return a no-op ObjectKindAccessor in cases where it is not expected to be serialized.
+//
+//所有的k8s resource object结构体都包含的metav1.TypeMeta的指针实现了这个接口
+//注意k8s.io/kubernetes/pkg/api/meta/interfaces.go同样具有Object interface,该interface负责更改/获取resource object的元数据
+//经过测试,只要k8s resource object的指针形式都实现了这个接口
 type Object interface {
 	GetObjectKind() schema.ObjectKind
 }

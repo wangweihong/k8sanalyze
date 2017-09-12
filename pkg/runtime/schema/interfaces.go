@@ -19,6 +19,7 @@ package schema
 // All objects that are serialized from a Scheme encode their type information. This interface is used
 // by serialization to set type information from the Scheme onto the serialized version of an object.
 // For objects that cannot be serialized or have unique requirements, this interface may be a no-op.
+//更新/获取对象的apigroup/version/resource kind
 type ObjectKind interface {
 	// SetGroupVersionKind sets or clears the intended serialized kind of an object. Passing kind nil
 	// should clear the current setting.

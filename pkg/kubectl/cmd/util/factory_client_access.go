@@ -239,7 +239,8 @@ func (f *ring0Factory) JSONEncoder() runtime.Encoder {
 	return api.Codecs.LegacyCodec(registered.EnabledVersions()...)
 }
 
-//没有被调用
+//ClientAccessFactory的方法
+//所有的k8s resource object的指针都实现了这个runtime.Object interface
 func (f *ring0Factory) UpdatePodSpecForObject(obj runtime.Object, fn func(*api.PodSpec) error) (bool, error) {
 	// TODO: replace with a swagger schema based approach (identify pod template via schema introspection)
 	switch t := obj.(type) {
@@ -265,6 +266,7 @@ func (f *ring0Factory) UpdatePodSpecForObject(obj runtime.Object, fn func(*api.P
 	}
 }
 
+//所有的k8s resource object的指针都实现了这个runtime.Object interface
 func (f *ring0Factory) MapBasedSelectorForObject(object runtime.Object) (string, error) {
 	// TODO: replace with a swagger schema based approach (identify pod selector via schema introspection)
 	switch t := object.(type) {
@@ -303,6 +305,7 @@ func (f *ring0Factory) MapBasedSelectorForObject(object runtime.Object) (string,
 	}
 }
 
+//所有的k8s resource object的指针都实现了这个runtime.Object interface
 func (f *ring0Factory) PortsForObject(object runtime.Object) ([]string, error) {
 	// TODO: replace with a swagger schema based approach (identify pod selector via schema introspection)
 	switch t := object.(type) {

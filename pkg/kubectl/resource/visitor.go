@@ -84,10 +84,13 @@ type Info struct {
 	// Optional, this is the provided object in a versioned type before defaulting
 	// and conversions into its corresponding internal type. This is useful for
 	// reflecting on user intent which may be lost after defaulting and conversions.
+	//更正,所有包含TypeMeta匿名结构体的k8s resource object的指针形式都实现了这个接口runtime.Object
+	//所以这里的VersionObject很有可能是k8s resource object的指针值.
 	VersionedObject runtime.Object //这里包含着resource通过map[string]interface{}解析后的值
 	//&Pod{ObjectMeta:ObjectMeta{Name:nginx,GenerateName:,Namespace:,SelfLink:,UID:,ResourceVersion:,Generation:0,CreationTimestamp:0001-01-01 00:00:00 +0000 UTC,DeletionTimestamp:<nil>,DeletionGracePeriodSeconds:nil,Labels:map[string]string{},Annotations:map[string]string{},OwnerReferences:[],Finalizers:[],ClusterName:,},Spec:PodSpec{Volumes:[],Containers:[{nginx-test nginx:1.7.9 [] []  [{ 0 80  }] [] [] {map[] map[]} [] nil nil nil   nil false false false}],RestartPolicy:,TerminationGracePeriodSeconds:nil,ActiveDeadlineSeconds:nil,DNSPolicy:,NodeSelector:map[string]string{},ServiceAccountName:,DeprecatedServiceAccount:,NodeName:,HostNetwork:false,HostPID:false,HostIPC:false,SecurityContext:nil,ImagePullSecrets:[],Hostname:,Subdomain:,Affinity:nil,},Status:PodStatus{Phase:,Conditions:[],Message:,Reason:,HostIP:,PodIP:,StartTime:<nil>,ContainerStatuses:[],QOSClass:,},}
 
 	// Optional, this is the most recent value returned by the server if available
+	//同上
 	Object runtime.Object
 	// Optional, this is the most recent resource version the server knows about for
 	// this type of resource. It may not match the resource version of the object,
@@ -116,6 +119,7 @@ func (i *Info) Visit(fn VisitorFunc) error {
 
 // Get retrieves the object from the Namespace and Name fields
 func (i *Info) Get() (err error) {
+	//
 	obj, err := NewHelper(i.Client, i.Mapping).Get(i.Namespace, i.Name, i.Export)
 	if err != nil {
 		if errors.IsNotFound(err) && len(i.Namespace) > 0 && i.Namespace != api.NamespaceDefault && i.Namespace != api.NamespaceAll {

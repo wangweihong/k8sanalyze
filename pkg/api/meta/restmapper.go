@@ -48,7 +48,7 @@ func (r *restScope) ParamDescription() string {
 }
 
 var RESTScopeNamespace = &restScope{
-	name:             RESTScopeNameNamespace,
+	name:             RESTScopeNameNamespace, //值为namespace
 	paramName:        "namespaces",
 	argumentName:     "namespace",
 	paramDescription: "object name and auth scope, such as for teams and projects",
@@ -69,19 +69,25 @@ var RESTScopeRoot = &restScope{
 //
 // TODO: Only accept plural for some operations for increased control?
 // (`get pod bar` vs `get pods bar`)
+/*
+示例：以Pod为例，Kind是{Group:"", Version: "v1", Kind: "Pod"},那么singular是{Group:"", Version: "v1", Kind: "pod"},plural则是{Group："", Version："v1", Resource:"pods"}。
+resource要区分单复数，是为了获取Pods信息。比如可以kubectl get pod，也可以kubectl get pods.
+*/
+//参考下面KindToResource
 type DefaultRESTMapper struct {
+	//默认api group versoin
 	defaultGroupVersions []schema.GroupVersion
 
-	resourceToKind       map[schema.GroupVersionResource]schema.GroupVersionKind
-	kindToPluralResource map[schema.GroupVersionKind]schema.GroupVersionResource
-	kindToScope          map[schema.GroupVersionKind]RESTScope
-	singularToPlural     map[schema.GroupVersionResource]schema.GroupVersionResource
-	pluralToSingular     map[schema.GroupVersionResource]schema.GroupVersionResource
+	resourceToKind       map[schema.GroupVersionResource]schema.GroupVersionKind     //资源到资源类型的映射
+	kindToPluralResource map[schema.GroupVersionKind]schema.GroupVersionResource     //资源类型到资源的映射
+	kindToScope          map[schema.GroupVersionKind]RESTScope                       // ??
+	singularToPlural     map[schema.GroupVersionResource]schema.GroupVersionResource //单数到复数?
+	pluralToSingular     map[schema.GroupVersionResource]schema.GroupVersionResource //复数到单数?
 
 	interfacesFunc VersionInterfacesFunc
 
 	// aliasToResource is used for mapping aliases to resources
-	aliasToResource map[string][]string
+	aliasToResource map[string][]string //资源的别名???
 }
 
 func (m *DefaultRESTMapper) String() string {
@@ -99,6 +105,8 @@ type VersionInterfacesFunc func(version schema.GroupVersion) (*VersionInterfaces
 // and the Kubernetes API conventions. Takes a group name, a priority list of the versions
 // to search when an object has no default version (set empty to return an error),
 // and a function that retrieves the correct metadata for a given version.
+//调用参考k8s.io/kubernetes/pkg/api/mapper.go
+//
 func NewDefaultRESTMapper(defaultGroupVersions []schema.GroupVersion, f VersionInterfacesFunc) *DefaultRESTMapper {
 	resourceToKind := make(map[schema.GroupVersionResource]schema.GroupVersionKind)
 	kindToPluralResource := make(map[schema.GroupVersionKind]schema.GroupVersionResource)
@@ -112,24 +120,27 @@ func NewDefaultRESTMapper(defaultGroupVersions []schema.GroupVersion, f VersionI
 		resourceToKind:       resourceToKind,
 		kindToPluralResource: kindToPluralResource,
 		kindToScope:          kindToScope,
-		defaultGroupVersions: defaultGroupVersions,
+		defaultGroupVersions: defaultGroupVersions, //参数
 		singularToPlural:     singularToPlural,
 		pluralToSingular:     pluralToSingular,
 		aliasToResource:      aliasToResource,
-		interfacesFunc:       f,
+		interfacesFunc:       f, //参数
 	}
 }
 
 func (m *DefaultRESTMapper) Add(kind schema.GroupVersionKind, scope RESTScope) {
+	//resource还分为单数和复数
 	plural, singular := KindToResource(kind)
-
+	//单数和复数互相转换
 	m.singularToPlural[singular] = plural
 	m.pluralToSingular[plural] = singular
-
+	//	根据单/复数找到相应的kind
 	m.resourceToKind[singular] = kind
 	m.resourceToKind[plural] = kind
 
+	//根据kind找到复数resource
 	m.kindToPluralResource[kind] = plural
+	//根据kind得到resource scope
 	m.kindToScope[kind] = scope
 }
 
@@ -144,20 +155,24 @@ var unpluralizedSuffixes = []string{
 // KindToResource converts Kind to a resource name.
 // Broken. This method only "sort of" works when used outside of this package.  It assumes that Kinds and Resources match
 // and they aren't guaranteed to do so.
+//Kind转换成resource
 func KindToResource(kind schema.GroupVersionKind) ( /*plural*/ schema.GroupVersionResource /*singular*/, schema.GroupVersionResource) {
 	kindName := kind.Kind
 	if len(kindName) == 0 {
 		return schema.GroupVersionResource{}, schema.GroupVersionResource{}
 	}
+	//单数名是kind的小写
 	singularName := strings.ToLower(kindName)
 	singular := kind.GroupVersion().WithResource(singularName)
 
+	//过滤掉包含endpoints后缀的?
 	for _, skip := range unpluralizedSuffixes {
 		if strings.HasSuffix(singularName, skip) {
 			return singular, singular
 		}
 	}
 
+	//单数名以s结尾
 	switch string(singularName[len(singularName)-1]) {
 	case "s":
 		return kind.GroupVersion().WithResource(singularName + "es"), singular

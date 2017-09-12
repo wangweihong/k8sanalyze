@@ -38,6 +38,7 @@ func ParseResourceArg(arg string) (*GroupVersionResource, GroupResource) {
 
 // GroupResource specifies a Group and a Resource, but does not force a version.  This is useful for identifying
 // concepts during lookup stages without having partially valid types
+//apigroup以及资源
 type GroupResource struct {
 	Group    string
 	Resource string
@@ -103,6 +104,14 @@ func (gvr *GroupVersionResource) String() string {
 
 // GroupKind specifies a Group and a Kind, but does not force a version.  This is useful for identifying
 // concepts during lookup stages without having partially valid types
+//怎么通过resource获得其GroupKind
+//首先k8s resource实现了k8s.io/kubernetes/pkg/runtime.Object interface,该interface实现了GetObjectKind()方法
+/*
+ obj := *v1.Pod{}
+ objKind := obj.GetObjectKind()
+ gvk := objKind.GetGroupVersionKind()
+ gk := gvc.GroupKind()  // schema.GroupKind
+*/
 type GroupKind struct {
 	Group string
 	Kind  string

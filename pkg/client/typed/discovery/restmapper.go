@@ -31,6 +31,7 @@ import (
 // APIGroupResources is an API group with a mapping of versions to
 // resources.
 //描述api组属性,以及api组各版本支持的资源
+//见GetAPIGroupResource()
 type APIGroupResources struct {
 	Group metav1.APIGroup //api组属性
 	// A mapping of version string to a slice of APIResources for
@@ -50,6 +51,8 @@ func NewRESTMapper(groupResources []*APIGroupResources, versionInterfaces meta.V
 	for _, group := range groupResources {
 		groupPriority = append(groupPriority, group.Group.Name)
 
+		//apigroup有指定首选的apiversion
+		//提取首选apiversion的信息添加到kindPriority/resourcePriority
 		if len(group.Group.PreferredVersion.Version) != 0 {
 			preferred := group.Group.PreferredVersion.Version
 			if _, ok := group.VersionedResources[preferred]; ok {
@@ -67,12 +70,15 @@ func NewRESTMapper(groupResources []*APIGroupResources, versionInterfaces meta.V
 			}
 		}
 
+		//遍历apigroup中所有支持的apiversion
 		for _, discoveryVersion := range group.Group.Versions {
+			//判断该version是否存在于groupResources中
 			resources, ok := group.VersionedResources[discoveryVersion.Version]
 			if !ok {
 				continue
 			}
 
+			//
 			gv := schema.GroupVersion{Group: group.Group.Name, Version: discoveryVersion.Version}
 			versionMapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{gv}, versionInterfaces)
 
@@ -181,6 +187,7 @@ func (d *DeferredDiscoveryRESTMapper) getDelegate() (meta.RESTMapper, error) {
 		return d.delegate, nil
 	}
 
+	//获得apiserver的apigroup/resource
 	groupResources, err := GetAPIGroupResources(d.cl)
 	if err != nil {
 		return nil, err

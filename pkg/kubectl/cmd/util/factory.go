@@ -90,10 +90,10 @@ type ClientAccessFactory interface {
 	// Returns a RESTClient for accessing Kubernetes resources or an error.
 	RESTClient() (*restclient.RESTClient, error)
 	// Returns a client.Config for accessing the Kubernetes server.
-	ClientConfig() (*restclient.Config, error)
-	// BareClientConfig returns a client.Config that has NOT been negotiated. It's
+	ClientConfig() (*restclient.Config, error) //获取restclient的配置.这和clientcmd配置无关
+	// BareClientConfig returns a client.Config that has NOT been negotiated(交涉/谈判). It's
 	// just directions to the server. People use this to build RESTMappers on top of
-	BareClientConfig() (*restclient.Config, error)
+	BareClientConfig() (*restclient.Config, error) //经过测试,这个config和上面的相比,GroupVersion为空
 
 	// TODO this should probably be removed and collapsed into whatever we want to use long term
 	// probably returning a restclient for a version and leaving contruction up to someone else
@@ -108,23 +108,28 @@ type ClientAccessFactory interface {
 	// Returns interfaces for decoding objects - if toInternal is set, decoded objects will be converted
 	// into their internal form (if possible). Eventually the internal form will be removed as an option,
 	// and only versioned objects will be returned.
-	Decoder(toInternal bool) runtime.Decoder
+	Decoder(toInternal bool) runtime.Decoder //解码文本成k8s资源对象?
 	// Returns an encoder capable of encoding a provided object into JSON in the default desired version.
 	JSONEncoder() runtime.Encoder
 
 	// UpdatePodSpecForObject will call the provided function on the pod spec this object supports,
 	// return false if no pod spec is supported, or return an error.
-	UpdatePodSpecForObject(obj runtime.Object, fn func(*api.PodSpec) error) (bool, error)
+	//k8s resource object的指针形式都实现runtime.Object这个接口,都可以传递给obj
+	UpdatePodSpecForObject(obj runtime.Object, fn func(*api.PodSpec) error) (bool, error) //更新指定资源的podTemplate
 
 	// MapBasedSelectorForObject returns the map-based selector associated with the provided object. If a
 	// new set-based selector is provided, an error is returned if the selector cannot be converted to a
 	// map-based selector
-	MapBasedSelectorForObject(object runtime.Object) (string, error)
+	//传递一个k8s resource object,返回该resource object的selector
+	MapBasedSelectorForObject(object runtime.Object) (string, error) //调用场景?
 	// PortsForObject returns the ports associated with the provided object
+	//传递一个k8s resource object,返回该resource object中pod spec使用的端口
 	PortsForObject(object runtime.Object) ([]string, error)
 	// ProtocolsForObject returns the <port, protocol> mapping associated with the provided object
+	//传递一个k8s resource object,返回该resource object中pod spec的端口的协议
 	ProtocolsForObject(object runtime.Object) (map[string]string, error)
 	// LabelsForObject returns the labels associated with the provided object
+	//传递一个k8s resource object,返回该resource object的Label
 	LabelsForObject(object runtime.Object) (map[string]string, error)
 
 	// Returns internal flagset
@@ -139,9 +144,10 @@ type ClientAccessFactory interface {
 
 	DefaultResourceFilterOptions(cmd *cobra.Command, withNamespace bool) *kubectl.PrintOptions
 	// DefaultResourceFilterFunc returns a collection of FilterFuncs suitable for filtering specific resource types.
-	DefaultResourceFilterFunc() kubectl.Filters
+	DefaultResourceFilterFunc() kubectl.Filters //??
 
 	// SuggestedPodTemplateResources returns a list of resource types that declare a pod template
+	//调用后打印[{ replicationcontroller} { deployment} { daemonset} { job} { replicaset}
 	SuggestedPodTemplateResources() []schema.GroupResource
 
 	// Returns a Printer for formatting objects of the given type or an error.
@@ -165,19 +171,20 @@ type ClientAccessFactory interface {
 	// overridden.
 	DefaultNamespace() (string, bool, error)
 	// Generators returns the generators for the provided command
-	Generators(cmdName string) map[string]kubectl.Generator
+	Generators(cmdName string) map[string]kubectl.Generator //??
 	// Check whether the kind of resources could be exposed
-	CanBeExposed(kind schema.GroupKind) error
+	//可以通过k8s resource object获得该该Resource的Kind类型
+	CanBeExposed(kind schema.GroupKind) error //检测resource支持导出port;实际就是检测resource是否是rc,rs,pod等
 	// Check whether the kind of resources could be autoscaled
-	CanBeAutoscaled(kind schema.GroupKind) error
+	CanBeAutoscaled(kind schema.GroupKind) error //检测resource支持弹性伸缩
 
 	// EditorEnvs returns a group of environment variables that the edit command
 	// can range over in order to determine if the user has specified an editor
 	// of their choice.
-	EditorEnvs() []string
+	EditorEnvs() []string //打印出来的结果是EDITOR/KUBE_EDITOR,就是返回这包含[EDITOR KUBE_EDITOR]
 
 	// PrintObjectSpecificMessage prints object-specific messages on the provided writer
-	PrintObjectSpecificMessage(obj runtime.Object, out io.Writer)
+	PrintObjectSpecificMessage(obj runtime.Object, out io.Writer) //如果resource是service,而且使用Lb annotation或者Node Port打印提示信息
 }
 
 // ObjectMappingFactory holds the second level of factory methods.  These functions depend upon ClientAccessFactory methods.
@@ -259,7 +266,7 @@ func makeInterfacesFor(versionList []schema.GroupVersion) func(version schema.Gr
 
 //实现了Factory接口
 type factory struct {
-	ClientAccessFactory  //用于生成客户端证书?
+	ClientAccessFactory  //提供了从KUBE_CONFIG/--kubeconfig/$HOME/.kube/config等参数以及各种标志位获得k8s client api的接口
 	ObjectMappingFactory //用于转换资源对象?
 	BuilderFactory
 }
@@ -268,7 +275,7 @@ type factory struct {
 // if optionalClientConfig is nil, then flags will be bound to a new clientcmd.ClientConfig.
 // if optionalClientConfig is not nil, then this factory will make use of it.
 //kubectl执行命名时,默认optioncalClientConfig为空
-//什么情况下optionalClientConfig不为空?设置了--kube-config的时候?
+//什么情况下optionalClientConfig不为空?设置了--kube-config的时候?和这个没关系!在这个阶段标志位还没有进行解析的.
 //有其他调用会传递参数过来的(如fedoration)
 func NewFactory(optionalClientConfig clientcmd.ClientConfig) Factory {
 	clientAccessFactory := NewClientAccessFactory(optionalClientConfig)            //ring0Factory实现了这个

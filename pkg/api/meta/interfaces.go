@@ -26,10 +26,12 @@ import (
 
 // VersionInterfaces contains the interfaces one should use for dealing with types of a particular version.
 type VersionInterfaces struct {
-	runtime.ObjectConvertor
-	MetadataAccessor
+	runtime.ObjectConvertor //转换resource Object从一个版本到另一个版本
+	MetadataAccessor        //获取/设置一个resource object的元数据
 }
 
+//获取一个Object Interface
+//注意所有的k8s resource结构中都包含的ObjectMeta字段实现了这个interface
 type ObjectMetaAccessor interface {
 	GetObjectMeta() Object
 }
@@ -38,6 +40,7 @@ type ObjectMetaAccessor interface {
 // internal API objects. Attempting to set or retrieve a field on an object that does
 // not support that field (Name, UID, Namespace on lists) will be a no-op and return
 // a default value.
+//更新/设置resource object,功能比MetadataAccessor多
 type Object interface {
 	GetNamespace() string
 	SetNamespace(namespace string)
@@ -88,6 +91,8 @@ type Type metav1.Type
 // a default value.
 //
 // MetadataAccessor exposes Interface in a way that can be used with multiple objects.
+//访问resource的元数据
+//k8s.io/kubernetes/pkg/api/meta/meta.go的resourceAccessor实现了这个interface
 type MetadataAccessor interface {
 	APIVersion(obj runtime.Object) (string, error)
 	SetAPIVersion(obj runtime.Object, version string) error
@@ -116,27 +121,31 @@ type MetadataAccessor interface {
 	Annotations(obj runtime.Object) (map[string]string, error)
 	SetAnnotations(obj runtime.Object, annotations map[string]string) error
 
-	runtime.ResourceVersioner
+	runtime.ResourceVersioner //获取和设置resource的版本
 }
 
 type RESTScopeName string
 
+//RESTScopeRoot指那些像Node,Namespace,PersistentVolume这些没有namspace的对象
 const (
 	RESTScopeNameNamespace RESTScopeName = "namespace"
 	RESTScopeNameRoot      RESTScopeName = "root"
 )
 
 // RESTScope contains the information needed to deal with REST resources that are in a resource hierarchy
+//只被k8s.io/kubernetes/pkg/api/meta/restmapper.go restScope实现
+//// 根据有无namespace，对象分为两类：RESTScopeNamespace和RESTScopeRoot
+//RESTScopeRoot指那些像Node,Namespace,PersistentVolume这些没有namspace的对象
 type RESTScope interface {
 	// Name of the scope
-	Name() RESTScopeName
+	Name() RESTScopeName //返回的值是RESTScopeNameNamespace
 	// ParamName is the optional name of the parameter that should be inserted in the resource url
 	// If empty, no param will be inserted
-	ParamName() string
+	ParamName() string //返回的是namespaces
 	// ArgumentName is the optional name that should be used for the variable holding the value.
-	ArgumentName() string
+	ArgumentName() string //返回的值是namespace
 	// ParamDescription is the optional description to use to document the parameter in api documentation
-	ParamDescription() string
+	ParamDescription() string //一些帮助信息
 }
 
 // RESTMapping contains the information needed to deal with objects of a specific
@@ -149,10 +158,12 @@ type RESTMapping struct {
 	GroupVersionKind schema.GroupVersionKind //api组版本,对象类型
 
 	// Scope contains the information needed to deal with REST Resources that are in a resource hierarchy
-	Scope RESTScope //??作用域
+	// 根据有无namespace，对象分为两类：RESTScopeNamespace和RESTScopeRoot
+	//RESTScopeRoot指那些像Node,Namespace,PersistentVolume这些没有namspace的对象
+	Scope RESTScope
 
-	runtime.ObjectConvertor //转换对象成不同版本??
-	MetadataAccessor        //直接处理k8s资源对象字段的interface
+	runtime.ObjectConvertor //转换resource object成不同api版本
+	MetadataAccessor        //获取/更改resource object的元数据
 }
 
 // RESTMapper allows clients to map resources to kind, and map kind and version
@@ -164,14 +175,18 @@ type RESTMapping struct {
 // unique across groups.
 //
 // TODO: split into sub-interfaces
+//k8s.io/kubernetes/pkg/api/meta/restmapper.go的DefaultRESTMapper实现了这个
 type RESTMapper interface {
 	// KindFor takes a partial resource and returns the single match.  Returns an error if there are multiple matches
+	//获取指定resource对应的resource kind
 	KindFor(resource schema.GroupVersionResource) (schema.GroupVersionKind, error)
 
 	// KindsFor takes a partial resource and returns the list of potential kinds in priority order
+	//获取指定resource所有Kind??
 	KindsFor(resource schema.GroupVersionResource) ([]schema.GroupVersionKind, error)
 
 	// ResourceFor takes a partial resource and returns the single match.  Returns an error if there are multiple matches
+	//??
 	ResourceFor(input schema.GroupVersionResource) (schema.GroupVersionResource, error)
 
 	// ResourcesFor takes a partial resource and returns the list of potential resource in priority order

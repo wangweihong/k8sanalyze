@@ -357,6 +357,7 @@ type handlerEntry struct {
 	args            []reflect.Value
 }
 
+//
 type PrintOptions struct {
 	NoHeaders          bool
 	WithNamespace      bool

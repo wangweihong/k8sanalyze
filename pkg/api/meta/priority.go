@@ -31,21 +31,22 @@ const (
 
 // PriorityRESTMapper is a wrapper for automatically choosing a particular Resource or Kind
 // when multiple matches are possible
+//默认选择特定版本的资源????
 type PriorityRESTMapper struct {
 	// Delegate is the RESTMapper to use to locate all the Kind and Resource matches
-	Delegate RESTMapper
+	Delegate RESTMapper //真正实现schema.RestMapper
 
 	// ResourcePriority is a list of priority patterns to apply to matching resources.
 	// The list of all matching resources is narrowed based on the patterns until only one remains.
 	// A pattern with no matches is skipped.  A pattern with more than one match uses its
 	// matches as the list to continue matching against.
-	ResourcePriority []schema.GroupVersionResource
+	ResourcePriority []schema.GroupVersionResource //资源名按优先级排序??
 
 	// KindPriority is a list of priority patterns to apply to matching kinds.
 	// The list of all matching kinds is narrowed based on the patterns until only one remains.
 	// A pattern with no matches is skipped.  A pattern with more than one match uses its
 	// matches as the list to continue matching against.
-	KindPriority []schema.GroupVersionKind
+	KindPriority []schema.GroupVersionKind //资源类型按按优先级排序????
 }
 
 func (m PriorityRESTMapper) String() string {
