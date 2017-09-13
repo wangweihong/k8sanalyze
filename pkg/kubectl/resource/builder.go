@@ -41,12 +41,13 @@ const defaultHttpGetAttempts int = 3
 // Builder provides convenience functions for taking arguments and parameters
 // from the command line and converting them to a list of resources to iterate
 // over using the Visitor interface.
+//主要作用是将命令行参数转换成资源?
 type Builder struct {
 	mapper *Mapper //??
 
 	errs []error
 
-	paths  []Visitor //???通过这个接口把参数转换成资源?
+	paths  []Visitor //???通过这个接口把参数转换成资源?应该是,
 	stream bool
 	dir    bool
 
@@ -55,14 +56,14 @@ type Builder struct {
 
 	resources []string
 
-	namespace    string
-	allNamespace bool //??
+	namespace    string //指定命名空间,如果值为api.NamespaceAll(""),则请求所有namespace
+	allNamespace bool   //是否指定全部命名空间
 	names        []string
 
-	resourceTuples []resourceTuple
+	resourceTuples []resourceTuple //??
 
-	defaultNamespace bool
-	requireNamespace bool
+	defaultNamespace bool //??
+	requireNamespace bool //??
 
 	flatten bool
 	latest  bool
@@ -72,11 +73,11 @@ type Builder struct {
 	singleResourceType bool
 	continueOnError    bool
 
-	singular bool
+	singular bool // 传入的FilenameOptions的Recursive为false
 
 	export bool
 
-	schema validation.Schema
+	schema validation.Schema //用来检测资源描述合法性?
 }
 
 var missingResourceError = fmt.Errorf(`You must provide one or more resources by argument or filename.
@@ -95,8 +96,8 @@ func IsUsageError(err error) bool {
 }
 
 type FilenameOptions struct {
-	Filenames []string
-	Recursive bool //指定资源目录?
+	Filenames []string //指定多个文件名?
+	Recursive bool     //指定资源目录?
 }
 
 //资源元组
@@ -113,6 +114,7 @@ func NewBuilder(mapper meta.RESTMapper, typer runtime.ObjectTyper, clientMapper 
 	}
 }
 
+//用于检测resource?
 func (b *Builder) Schema(schema validation.Schema) *Builder {
 	b.schema = schema
 	return b
@@ -178,6 +180,16 @@ func (b *Builder) Stdin() *Builder {
 // include the name string in the error message. If ContinueOnError() is set
 // prior to this method being called, objects in the stream that are unrecognized
 // will be ignored (but logged at V(2)).
+//添加输入数据,如创建K8s resource的yaml文件内容
+/*
+ reader := bytes.NewReader([]byte(bys))
+
+   result, err := b.ContinueOnError().
+	     Schema(schema).
+			     NamespaceParam(namespace).
+					     DefaultNamespace().
+							     Stream(reader, ""). //k8s对象
+*/
 func (b *Builder) Stream(r io.Reader, name string) *Builder {
 	b.stream = true
 	b.paths = append(b.paths, NewStreamVisitor(r, b.mapper, name, b.schema))

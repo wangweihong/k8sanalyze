@@ -52,6 +52,7 @@ import (
 )
 
 //实现了ObjectMappingFactory
+//需要ClientAcessFactory来提供client
 type ring1Factory struct {
 	clientAccessFactory ClientAccessFactory
 }
@@ -65,7 +66,7 @@ func NewObjectMappingFactory(clientAccessFactory ClientAccessFactory) ObjectMapp
 }
 
 func (f *ring1Factory) Object() (meta.RESTMapper, runtime.ObjectTyper) {
-	//获得所有已注册的转换器
+	//这里RESTMapper函数返回的RESTMapper interface的实现是k8s.io/kubernetes/pkg/api/meta/priority.go PriorityRESTMapper结构体
 	mapper := registered.RESTMapper()
 	//
 	discoveryClient, err := f.clientAccessFactory.DiscoveryClient()
@@ -115,7 +116,9 @@ func (f *ring1Factory) UnstructuredObject() (meta.RESTMapper, runtime.ObjectType
 	return NewShortcutExpander(mapper, discoveryClient), typer, nil
 }
 
+//将RESTMapping转换成一个访问资源的url路径的resource http request
 func (f *ring1Factory) ClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error) {
+	//k8s集群配置
 	cfg, err := f.clientAccessFactory.ClientConfig()
 	if err != nil {
 		return nil, err

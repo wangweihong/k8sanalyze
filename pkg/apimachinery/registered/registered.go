@@ -131,8 +131,9 @@ func NewOrDie(kubeAPIVersions string) *APIRegistrationManager {
 
 // People are calling global functions. Let them continue to do that (for now).
 var (
-	ValidateEnvRequestedVersions  = DefaultAPIRegistrationManager.ValidateEnvRequestedVersions
-	AllPreferredGroupVersions     = DefaultAPIRegistrationManager.AllPreferredGroupVersions
+	ValidateEnvRequestedVersions = DefaultAPIRegistrationManager.ValidateEnvRequestedVersions
+	AllPreferredGroupVersions    = DefaultAPIRegistrationManager.AllPreferredGroupVersions
+	//这里RESTMapper函数返回的RESTMapper interface的实现是k8s.io/kubernetes/pkg/api/meta/priority.go PriorityRESTMapper结构体
 	RESTMapper                    = DefaultAPIRegistrationManager.RESTMapper
 	GroupOrDie                    = DefaultAPIRegistrationManager.GroupOrDie
 	AddThirdPartyAPIGroupVersions = DefaultAPIRegistrationManager.AddThirdPartyAPIGroupVersions
@@ -342,12 +343,13 @@ func (m *APIRegistrationManager) RESTMapper(versionPatterns ...schema.GroupVersi
 	unionMapper := meta.MultiRESTMapper{}
 	unionedGroups := sets.NewString()
 
-	//检测api注册管理器启动了哪些api版本
+	//检测apigroup注册管理器中注册了多少apigroup/version
 	for enabledVersion := range m.enabledVersions {
 		//插入为存在的group
 		if !unionedGroups.Has(enabledVersion.Group) {
 			unionedGroups.Insert(enabledVersion.Group)
 			groupMeta := m.groupMetaMap[enabledVersion.Group]
+			//添加所有注册的apigroup的RESTMapper
 			unionMapper = append(unionMapper, groupMeta.RESTMapper)
 		}
 	}

@@ -177,6 +177,7 @@ type ObjectVersioner interface {
 // ObjectConvertor converts an object to a different version.
 //转换一个对象成另一个版本
 //猜测在k8s1.5中job在batch/v2alpha1,在k8s1.7中job在batch/v1,需要将旧版本进行转换
+//k8s.io/kubernetes/pkg/runtime/scheme.go Schema实现
 type ObjectConvertor interface {
 	// Convert attempts to convert one object into another, or returns an error. This method does
 	// not guarantee the in object is not mutated. The context argument will be passed to

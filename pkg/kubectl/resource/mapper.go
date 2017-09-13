@@ -31,6 +31,7 @@ type DisabledClientForMapping struct {
 	ClientMapper
 }
 
+//转换RestMapping成一个RESTClient
 func (f DisabledClientForMapping) ClientForMapping(mapping *meta.RESTMapping) (RESTClient, error) {
 	return nil, nil
 }
@@ -40,8 +41,8 @@ func (f DisabledClientForMapping) ClientForMapping(mapping *meta.RESTMapping) (R
 type Mapper struct {
 	runtime.ObjectTyper
 	meta.RESTMapper
-	ClientMapper
-	runtime.Decoder
+	ClientMapper    //
+	runtime.Decoder //解码resource文档?
 }
 
 // InfoForData creates an Info object for the given data. An error is returned
@@ -60,6 +61,7 @@ func (m *Mapper) InfoForData(data []byte, source string) (*Info, error) {
 		return nil, fmt.Errorf("unable to recognize %q: %v", source, err)
 	}
 
+	//通过RESTMapping获得一个RESTClient?
 	client, err := m.ClientForMapping(mapping)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to a server to handle %q: %v", mapping.Resource, err)

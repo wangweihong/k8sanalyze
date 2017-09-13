@@ -40,6 +40,7 @@ import (
 )
 
 // Scaler provides an interface for resources that can be scaled.
+//资源缩放
 type Scaler interface {
 	// Scale scales the named resource after checking preconditions. It optionally
 	// retries in the event of resource version mismatch (if retry is not nil),

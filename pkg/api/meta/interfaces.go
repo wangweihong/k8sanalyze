@@ -126,7 +126,7 @@ type MetadataAccessor interface {
 
 type RESTScopeName string
 
-//RESTScopeRoot指那些像Node,Namespace,PersistentVolume这些没有namspace的对象
+//RESTScopeRoot指那些像Node,Namespace,PersistentVolume这些没有namspace的对象的作用域
 const (
 	RESTScopeNameNamespace RESTScopeName = "namespace"
 	RESTScopeNameRoot      RESTScopeName = "root"
@@ -151,6 +151,12 @@ type RESTScope interface {
 // RESTMapping contains the information needed to deal with objects of a specific
 // resource and kind in a RESTful manner.
 //见k8s.io/kubernetes/pkg/kubectl/resource/helper.go使用RESTMapping来创建资源
+//resource和这个结构体之间的关系?
+//k8s.io/kubernetes/pkg/kubectl/resource/visitor.go UpdateObjectNamespace()中RestMapping利用MetadataAccessor来更该
+//resource object的namespace
+//k8s.io/kubernetes/pkg/kubectl/resource/interfaces.go 中ClientMapper,根据RESTMapping生成一个RESTClient(包含url,以及http.Client)
+//猜想,一个resource object在不同版本的apiserver中其apigroup/version是不同的,apiserver处理该资源的URL也是不同的.
+//因此RESTMapping根据从服务端获得的信息,将资源转换成特定的URL格式,让http.Client提供进行请求
 type RESTMapping struct {
 	// Resource is a string representing the name of this resource as a REST client would see it
 	Resource string //资源的名字

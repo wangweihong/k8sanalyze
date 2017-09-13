@@ -45,6 +45,7 @@ func NewBuilderFactory(clientAccessFactory ClientAccessFactory, objectMappingFac
 }
 
 func (f *ring2Factory) PrintObject(cmd *cobra.Command, mapper meta.RESTMapper, obj runtime.Object, out io.Writer) error {
+	//
 	gvks, _, err := api.Scheme.ObjectKinds(obj)
 	if err != nil {
 		return err

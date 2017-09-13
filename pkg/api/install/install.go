@@ -114,6 +114,7 @@ func newRESTMapper(externalVersions []schema.GroupVersion) meta.RESTMapper {
 		"ThirdPartyResourceData",
 		"ThirdPartyResourceList")
 
+	//
 	mapper := api.NewDefaultRESTMapper(externalVersions, interfacesFor, importPrefix, ignoredKinds, rootScoped)
 
 	return mapper

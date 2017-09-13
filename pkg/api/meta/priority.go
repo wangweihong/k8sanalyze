@@ -32,9 +32,11 @@ const (
 // PriorityRESTMapper is a wrapper for automatically choosing a particular Resource or Kind
 // when multiple matches are possible
 //默认选择特定版本的资源????
+//k8s.io/kubernetes/pkg/apimachinery/registered/registered.go  RESTMapper()函数创建了PriorityRESTMapper
+//其中Delegate其实现是一个RESTMapper数组!!!
 type PriorityRESTMapper struct {
 	// Delegate is the RESTMapper to use to locate all the Kind and Resource matches
-	Delegate RESTMapper //真正实现schema.RestMapper
+	Delegate RESTMapper //真正实现schema.RestMapper,注意一点,
 
 	// ResourcePriority is a list of priority patterns to apply to matching resources.
 	// The list of all matching resources is narrowed based on the patterns until only one remains.

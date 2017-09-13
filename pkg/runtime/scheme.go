@@ -40,6 +40,9 @@ import (
 //
 // Schemes are not expected to change at runtime and are only threadsafe after
 // registration is complete.
+/*
+用于API资源之间的序列化、反序列化、版本转换。Scheme里面还有好几个map，前面的结构体存储的都是unversioned.GroupVersionKind、unversioned.GroupVersion这些东西，这些东西本质上只是表示资源的字符串标识，Scheme存储了对应着标志的具体的API资源的结构体，即relect.Type
+*/
 type Scheme struct {
 	// versionMap allows one to figure out the go type of an object with
 	// the given version and name.

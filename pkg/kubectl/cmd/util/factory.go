@@ -197,6 +197,8 @@ type ObjectMappingFactory interface {
 	UnstructuredObject() (meta.RESTMapper, runtime.ObjectTyper, error)
 	// Returns a RESTClient for working with the specified RESTMapping or an error. This is intended
 	// for working with arbitrary resources and is not guaranteed to point to a Kubernetes APIServer.
+	//实现了 k8s.io/kubernetes/pkg/kubectl/resource/interfaces.go ClientMapper
+	//非常重要,在转换resource到相应的http client.
 	ClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error)
 	// Returns a RESTClient for working with Unstructured objects.
 	UnstructuredClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error) //这个的作用?
@@ -206,6 +208,7 @@ type ObjectMappingFactory interface {
 	// LogsForObject returns a request for the logs associated with the provided object
 	LogsForObject(object, options runtime.Object) (*restclient.Request, error)
 	// Returns a Scaler for changing the size of the specified RESTMapping type or an error
+	//获得指定资源类型的Scaler(只有支持scale的resource才有Scaler)
 	Scaler(mapping *meta.RESTMapping) (kubectl.Scaler, error)
 	// Returns a Reaper for gracefully shutting down resources.
 	Reaper(mapping *meta.RESTMapping) (kubectl.Reaper, error)
@@ -235,6 +238,7 @@ type BuilderFactory interface {
 	// PrintObject prints an api object given command line flags to modify the output format
 	PrintObject(cmd *cobra.Command, mapper meta.RESTMapper, obj runtime.Object, out io.Writer) error
 	// One stop shopping for a Builder
+	//构建器一条龙
 	NewBuilder() *resource.Builder
 }
 

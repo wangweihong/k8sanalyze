@@ -33,6 +33,9 @@ type RESTClient interface {
 }
 
 // ClientMapper abstracts retrieving a Client for mapped objects.
+//根据RESTMapping获得一个resource特定版本的RestClient
+//这个接口阵阵实现是在k8s.io/kubernetes/pkg/kubectl/cmd/util/factory_builder.go resource.ClientMapperFunc(f.objectMappingFactory.ClientForMapping)
+//其他如StreamVistor等只不过是嵌入了ClientMapper
 type ClientMapper interface {
 	ClientForMapping(mapping *meta.RESTMapping) (RESTClient, error)
 }

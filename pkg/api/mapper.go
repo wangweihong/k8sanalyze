@@ -33,6 +33,7 @@ func NewDefaultRESTMapper(defaultGroupVersions []schema.GroupVersion, interfaces
 }
 
 // Instantiates a DefaultRESTMapper based on types registered in the given scheme.
+//这里创建一个meta.DefaultRESTMapper,其实现了meta.RESTMapper interface
 func NewDefaultRESTMapperFromScheme(defaultGroupVersions []schema.GroupVersion, interfacesFunc meta.VersionInterfacesFunc,
 	importPathPrefix string, ignoredKinds, rootScoped sets.String, scheme *runtime.Scheme) *meta.DefaultRESTMapper {
 

@@ -47,6 +47,7 @@ const (
 )
 
 // Visitor lets clients walk a list of resources.
+//实现StreamVisitor
 type Visitor interface {
 	Visit(VisitorFunc) error
 }
@@ -75,12 +76,12 @@ type ResourceMapping interface {
 type Info struct {
 	Client    RESTClient
 	Mapping   *meta.RESTMapping
-	Namespace string
-	Name      string
+	Namespace string //namespace
+	Name      string //?资源名?
 
 	// Optional, Source is the filename or URL to template file (.json or .yaml),
 	// or stdin to use to handle the resource
-	Source string
+	Source string //文件名/URL路径
 	// Optional, this is the provided object in a versioned type before defaulting
 	// and conversions into its corresponding internal type. This is useful for
 	// reflecting on user intent which may be lost after defaulting and conversions.
@@ -513,10 +514,10 @@ func (v *FileVisitor) Visit(fn VisitorFunc) error {
 // TODO: depends on objects being in JSON format before being passed to decode - need to implement
 // a stream decoder method on runtime.Codec to properly handle this.
 type StreamVisitor struct {
-	io.Reader
-	*Mapper //这个的作用?
+	io.Reader //数据读入
+	*Mapper   //这个的作用?
 
-	Source string
+	Source string //资源名??
 	Schema validation.Schema
 }
 
@@ -531,6 +532,7 @@ func NewStreamVisitor(r io.Reader, mapper *Mapper, source string, schema validat
 }
 
 // Visit implements Visitor over a stream. StreamVisitor is able to distinct multiple resources in one stream.
+//解析输入流内容
 func (v *StreamVisitor) Visit(fn VisitorFunc) error {
 	//创建一个解析器来解析传递过来的数据流
 	d := yaml.NewYAMLOrJSONDecoder(v.Reader, 4096)
@@ -548,9 +550,11 @@ func (v *StreamVisitor) Visit(fn VisitorFunc) error {
 		if len(ext.Raw) == 0 || bytes.Equal(ext.Raw, []byte("null")) {
 			continue
 		}
+		//检查是否合法?
 		if err := ValidateSchema(ext.Raw, v.Schema); err != nil {
 			return fmt.Errorf("error validating %q: %v", v.Source, err)
 		}
+		//
 		info, err := v.InfoForData(ext.Raw, v.Source)
 		if err != nil {
 			if fnErr := fn(info, err); fnErr != nil {
@@ -564,6 +568,7 @@ func (v *StreamVisitor) Visit(fn VisitorFunc) error {
 	}
 }
 
+//更新Info中包含的资源对象的namespace
 func UpdateObjectNamespace(info *Info, err error) error {
 	if err != nil {
 		return err

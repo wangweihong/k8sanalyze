@@ -124,6 +124,7 @@ type Unknown struct {
 
 // VersionedObjects is used by Decoders to give callers a way to access all versions
 // of an object during the decoding process.
+//??所有版本的对象???为什么会存在多个版本的对象?
 type VersionedObjects struct {
 	// Objects is the set of objects retrieved during decoding, in order of conversion.
 	// The 0 index is the object as serialized on the wire. If conversion has occurred,

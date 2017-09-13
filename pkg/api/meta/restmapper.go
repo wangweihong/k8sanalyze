@@ -74,13 +74,14 @@ var RESTScopeRoot = &restScope{
 resource要区分单复数，是为了获取Pods信息。比如可以kubectl get pod，也可以kubectl get pods.
 */
 //参考下面KindToResource
+//实现了RESTMapper interface
 type DefaultRESTMapper struct {
 	//默认api group versoin
 	defaultGroupVersions []schema.GroupVersion
 
 	resourceToKind       map[schema.GroupVersionResource]schema.GroupVersionKind     //资源到资源类型的映射
 	kindToPluralResource map[schema.GroupVersionKind]schema.GroupVersionResource     //资源类型到资源的映射
-	kindToScope          map[schema.GroupVersionKind]RESTScope                       // ??
+	kindToScope          map[schema.GroupVersionKind]RESTScope                       //资源类型到 作用域的映射
 	singularToPlural     map[schema.GroupVersionResource]schema.GroupVersionResource //单数到复数?
 	pluralToSingular     map[schema.GroupVersionResource]schema.GroupVersionResource //复数到单数?
 
@@ -216,8 +217,10 @@ func (m *DefaultRESTMapper) ResourceSingularizer(resourceType string) (string, e
 }
 
 // coerceResourceForMatching makes the resource lower case and converts internal versions to unspecified (legacy behavior)
+//资源名小写
 func coerceResourceForMatching(resource schema.GroupVersionResource) schema.GroupVersionResource {
 	resource.Resource = strings.ToLower(resource.Resource)
+	//如果资源版本仅是试用,非稳定版本
 	if resource.Version == runtime.APIVersionInternal {
 		resource.Version = ""
 	}
