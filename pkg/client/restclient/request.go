@@ -101,7 +101,7 @@ type Request struct {
 
 	// structural elements of the request that are part of the Kubernetes API conventions
 	namespace    string
-	namespaceSet bool
+	namespaceSet bool //
 	resource     string
 	resourceName string
 	subresource  string
@@ -249,6 +249,7 @@ func (r *Request) Namespace(namespace string) *Request {
 }
 
 // NamespaceIfScoped is a convenience function to set a namespace if scoped is true
+//用于判定一个资源是不是和命名空间相关的
 func (r *Request) NamespaceIfScoped(namespace string, scoped bool) *Request {
 	if scoped {
 		return r.Namespace(namespace)

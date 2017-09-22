@@ -205,6 +205,8 @@ type ObjectTyper interface {
 }
 
 // ObjectCreater contains methods for instantiating an object by kind and version.
+//实现runtime.Schema
+//根据schema的GroupVersionKind创建出一个新的resource object
 type ObjectCreater interface {
 	New(kind schema.GroupVersionKind) (out Object, err error)
 }
@@ -244,6 +246,7 @@ type SelfLinker interface {
 //所有的k8s resource object结构体都包含的metav1.TypeMeta的指针实现了这个接口
 //注意k8s.io/kubernetes/pkg/api/meta/interfaces.go同样具有Object interface,该interface负责更改/获取resource object的元数据
 //经过测试,只要k8s resource object的指针形式都实现了这个接口
+//即通过Object作为参数的函数,可以传递各种resource
 type Object interface {
 	GetObjectKind() schema.ObjectKind
 }

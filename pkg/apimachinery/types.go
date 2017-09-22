@@ -39,16 +39,18 @@ type GroupMeta struct {
 	// TODO: when versioning changes, make this part of each API definition.
 	// TODO(lavalamp): Combine SelfLinker & ResourceVersioner interfaces, force all uses
 	// to go through the InterfacesFor method below.
-	SelfLinker runtime.SelfLinker
+	SelfLinker runtime.SelfLinker //
 
 	// RESTMapper provides the default mapping between REST paths and the objects declared in api.Scheme and all known
 	// versions.
+	//apigroup注册时设置见pkg/api/install/install.go
 	RESTMapper meta.RESTMapper
 
 	// InterfacesFor returns the default Codec and ResourceVersioner for a given version
 	// string, or an error if the version is not known.
 	// TODO: make this stop being a func pointer and always use the default
 	// function provided below once every place that populates this field has been changed.
+	//这个也是在apiVersion
 	InterfacesFor func(version schema.GroupVersion) (*meta.VersionInterfaces, error)
 
 	// InterfacesByVersion stores the per-version interfaces.

@@ -44,6 +44,7 @@ func SetKubernetesDefaults(config *restclient.Config) error {
 		copyGroupVersion := g.GroupVersion
 		config.GroupVersion = &copyGroupVersion
 	}
+	//资源数据解析
 	if config.NegotiatedSerializer == nil {
 		config.NegotiatedSerializer = api.Codecs
 	}

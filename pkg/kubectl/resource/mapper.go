@@ -1,5 +1,4 @@
-/*
-Copyright 2014 The Kubernetes Authors.
+/* Copyright 2014 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,33 +39,38 @@ func (f DisabledClientForMapping) ClientForMapping(mapping *meta.RESTMapping) (R
 // needed to create Info for arbitrary objects.
 type Mapper struct {
 	runtime.ObjectTyper
-	meta.RESTMapper
-	ClientMapper    //
-	runtime.Decoder //解码resource文档?
+	meta.RESTMapper //
+	ClientMapper    //k8s.io/kubernetes/pkg/kubectl/resource/interfaces.go中定义的,
+	//执行后获得k8s.io/kubernetes/pkg/client/restclient/client.go定义的RESTClient
+	runtime.Decoder //解码resource文档
 }
 
 // InfoForData creates an Info object for the given data. An error is returned
 // if any of the decoding or client lookup steps fail. Name and namespace will be
 // set into Info if the mapping's MetadataAccessor can retrieve them.
+//在这里并没有发起http请求
 func (m *Mapper) InfoForData(data []byte, source string) (*Info, error) {
 	versions := &runtime.VersionedObjects{}
+	//解析数据
 	_, gvk, err := m.Decode(data, nil, versions)
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode %q: %v", source, err)
 	}
-
+	//解析后第一个对象和解析后最后一个对象
+	//没有理解?
 	obj, versioned := versions.Last(), versions.First()
 	mapping, err := m.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
 		return nil, fmt.Errorf("unable to recognize %q: %v", source, err)
 	}
 
-	//通过RESTMapping获得一个RESTClient?
+	//通过RESTMapping获得一个RESTClient,对
 	client, err := m.ClientForMapping(mapping)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to a server to handle %q: %v", mapping.Resource, err)
 	}
 
+	//获得第一个资源对象的名字/namespace/resourceVersion
 	name, _ := mapping.MetadataAccessor.Name(obj)
 	namespace, _ := mapping.MetadataAccessor.Namespace(obj)
 	resourceVersion, _ := mapping.MetadataAccessor.ResourceVersion(obj)

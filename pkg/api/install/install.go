@@ -35,26 +35,33 @@ import (
 
 const importPrefix = "k8s.io/kubernetes/pkg/api"
 
+//metadata accessor,提供方法来获取/设置resource的元数据
+//也实现了pkg/runtime.SelfLinker接口
 var accessor = meta.NewAccessor()
 
 // availableVersions lists all known external versions for this group from most preferred to least preferred
 //apigroup可以用的版本
+//在创建DefaultRESTMapper时使用
 var availableVersions = []schema.GroupVersion{v1.SchemeGroupVersion}
 
 func init() {
 	//注册apigroup到k8s.io/kubernetes/pkg/apimachinery/registered/registered.go 的DefaultAPIRegistrationManager
 	registered.RegisterVersions(availableVersions)
+	//添加所有被允许的apiversion
 	externalVersions := []schema.GroupVersion{}
 	for _, v := range availableVersions {
+		//检测版本是否被注册器允许
 		if registered.IsAllowedVersion(v) {
 			externalVersions = append(externalVersions, v)
 		}
 	}
+	//没有被允许的apigroup version,忽略
 	if len(externalVersions) == 0 {
 		glog.V(4).Infof("No version is registered for group %v", api.GroupName)
 		return
 	}
 
+	//使能apiversions,如果有apiversion没有注册,则报错
 	if err := registered.EnableVersions(externalVersions...); err != nil {
 		glog.V(4).Infof("%v", err)
 		return
@@ -70,17 +77,20 @@ func init() {
 // We can combine registered.RegisterVersions, registered.EnableVersions and
 // registered.RegisterGroup once we have moved enableVersions there.
 func enableVersions(externalVersions []schema.GroupVersion) error {
+	//对api.Scheme,添加apiGroup/version/Kind的映射
 	addVersionsToScheme(externalVersions...)
+	//第一个版本作为默认版本
 	preferredExternalVersion := externalVersions[0]
 
 	groupMeta := apimachinery.GroupMeta{
 		GroupVersion:  preferredExternalVersion, //默认的版本
-		GroupVersions: externalVersions,
+		GroupVersions: externalVersions,         //所有被APIRegistration允许的版本
 		RESTMapper:    newRESTMapper(externalVersions),
 		SelfLinker:    runtime.SelfLinker(accessor),
 		InterfacesFor: interfacesFor,
 	}
 
+	//注册GroupMeta到APIRegistrationManager
 	if err := registered.RegisterGroup(groupMeta); err != nil {
 		return err
 	}
@@ -122,6 +132,7 @@ func newRESTMapper(externalVersions []schema.GroupVersion) meta.RESTMapper {
 
 // InterfacesFor returns the default Codec and ResourceVersioner for a given version
 // string, or an error if the version is not known.
+//获得VersionInteface
 func interfacesFor(version schema.GroupVersion) (*meta.VersionInterfaces, error) {
 	switch version {
 	case v1.SchemeGroupVersion:
@@ -130,11 +141,13 @@ func interfacesFor(version schema.GroupVersion) (*meta.VersionInterfaces, error)
 			MetadataAccessor: accessor,
 		}, nil
 	default:
+		//获得指定api组的元数据
 		g, _ := registered.Group(api.GroupName)
 		return nil, fmt.Errorf("unsupported storage version: %s (valid: %v)", version, g.GroupVersions)
 	}
 }
 
+//>>>>
 func addVersionsToScheme(externalVersions ...schema.GroupVersion) {
 	// add the internal version to Scheme
 	if err := api.AddToScheme(api.Scheme); err != nil {

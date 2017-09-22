@@ -58,10 +58,14 @@ type Interface interface {
 // any failure.
 //
 // Most consumers should use client.New() to get a Kubernetes API client.
+//实现了k8s.io/kubernetes/pkg/kubectl/resource/interfaces.go的resource.RESTClient接口
 type RESTClient struct {
 	// base is the root URL for all invocations of the client
+	//http://<ip:port>  或者https://<ip:port>
 	base *url.URL
 	// versionedAPIPath is a path segment connecting the base URL to the resource root
+	//versionedAPIPath:/api/<group>/<version>或者/apis/<group>/version,如/apis/batch/v2alpha1
+	//见pkg/client/restclient/config.go RESTClientFor()的DefaultServerURL()
 	versionedAPIPath string
 
 	// contentConfig is the information used to communicate with the server.

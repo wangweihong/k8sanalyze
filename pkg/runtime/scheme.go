@@ -41,15 +41,33 @@ import (
 // Schemes are not expected to change at runtime and are only threadsafe after
 // registration is complete.
 /*
-用于API资源之间的序列化、反序列化、版本转换。Scheme里面还有好几个map，前面的结构体存储的都是unversioned.GroupVersionKind、unversioned.GroupVersion这些东西，这些东西本质上只是表示资源的字符串标识，Scheme存储了对应着标志的具体的API资源的结构体，即relect.Type
+用于APIgroup中资源之间的序列化、反序列化、版本转换。Scheme里面还有好几个map，前面的结构体存储的都是unversioned.GroupVersionKind、unversioned.GroupVersion这些东西，这些东西本质上只是表示资源的字符串标识，Scheme存储了对应着标志的具体的API资源的结构体，即relect.Type
 */
 type Scheme struct {
 	// versionMap allows one to figure out the go type of an object with
 	// the given version and name.
+	//见pkg/api/register.goz中的.AddKnownTypes(),用于将apigroup/version以及该apigroup/version关联的resource绑定在一起
+	//reflect.Type,资源类型?
+	//通过Scheme.AllKnownType()查看pkg/api/register.go的Scheme时,部分数据
+	/*格式 <group>/version,kind=<kind> --- <资源类型>
+	/v1, Kind=GetOptions  ---   v1.GetOptions
+	/v1, Kind=ConfigMapList  ---   v1.ConfigMapList
+	authorization.k8s.io/__internal, Kind=WatchEvent  ---   versioned.InternalEvent
+	autoscaling/__internal, Kind=WatchEvent  ---   versioned.InternalEvent
+	certificates.k8s.io/__internal, Kind=ListOptions  ---   api.ListOptions
+	extensions/__internal, Kind=HorizontalPodAutoscaler  ---   autoscaling.HorizontalPodAutoscaler
+	extensions/__internal, Kind=ThirdPartyResourceDataList  ---   extensions.ThirdPartyResourceDataList
+	policy/__internal, Kind=ListOptions  ---   api.ListOptions
+	rbac.authorization.k8s.io/v1alpha1, Kind=WatchEvent  ---   versioned.Event
+	/__internal, Kind=LimitRangeList  ---   api.LimitRangeList
+	extensions/__internal, Kind=ThirdPartyResourceData  ---   extensions.ThirdPartyResourceData
+	storage.k8s.io/v1beta1, Kind=StorageClass  ---   v1beta1.StorageClass
+	*/
 	gvkToType map[schema.GroupVersionKind]reflect.Type
 
 	// typeToGroupVersion allows one to find metadata for a given go object.
 	// The reflect.Type we index by should *not* be a pointer.
+	//资源对象类型定义到GVK的转换
 	typeToGVK map[reflect.Type][]schema.GroupVersionKind
 
 	// unversionedTypes are transformed without conversion in ConvertToVersion.
@@ -58,6 +76,7 @@ type Scheme struct {
 	// unversionedKinds are the names of kinds that can be created in the context of any group
 	// or version
 	// TODO: resolve the status of unversioned types.
+	//没有apigroupversion的资源类型
 	unversionedKinds map[string]reflect.Type
 
 	// Map from version and resource to the corresponding func to convert
@@ -81,6 +100,9 @@ type Scheme struct {
 type FieldLabelConversionFunc func(label, value string) (internalLabel, internalValue string, err error)
 
 // NewScheme creates a new Scheme. This scheme is pluggable by default.
+//实现了k8s.io/kubernetes/pkg/runtime/interfaces.go的ObjectConverter接口
+//负责将一个resource object从一个version转换到另一个version
+//每一个Scheme都绑定一个DefaultRESTMapper(k8s.io/kubernetes/pkg/api/meta/restmapper.go)
 func NewScheme() *Scheme {
 	s := &Scheme{
 		gvkToType:        map[schema.GroupVersionKind]reflect.Type{},
@@ -110,8 +132,10 @@ func NewScheme() *Scheme {
 
 // nameFunc returns the name of the type that we wish to use to determine when two types attempt
 // a conversion. Defaults to the go name of the type if the type is not registered.
+//获得指定资源对象类型定义对应的资源类型
 func (s *Scheme) nameFunc(t reflect.Type) string {
 	// find the preferred names for this type
+	//找到指定的资源类型的gvk
 	gvks, ok := s.typeToGVK[t]
 	if !ok {
 		return t.Name()
@@ -165,11 +189,15 @@ func (s *Scheme) AddUnversionedTypes(version schema.GroupVersion, types ...Objec
 // All objects passed to types should be pointers to structs. The name that go reports for
 // the struct becomes the "kind" field when encoding. Version may not be empty - use the
 // APIVersionInternal constant if you have a type that does not have a formal version.
+//绑定apigroup/version,相应的resource object
+//k8s.io/kubernetes/pkg/api/v1/register.go的addKnownTypes()
 func (s *Scheme) AddKnownTypes(gv schema.GroupVersion, types ...Object) {
 	if len(gv.Version) == 0 {
 		panic(fmt.Sprintf("version is required on all types: %s %v", gv, types[0]))
 	}
+	//遍历所有的runtime object
 	for _, obj := range types {
+		//获得object的资源类型
 		t := reflect.TypeOf(obj)
 		if t.Kind() != reflect.Ptr {
 			panic("All types must be pointers to structs.")
@@ -179,6 +207,8 @@ func (s *Scheme) AddKnownTypes(gv schema.GroupVersion, types ...Object) {
 			panic("All types must be pointers to structs.")
 		}
 
+		//创建group/veresion/kind
+		//添加到scheme中
 		gvk := gv.WithKind(t.Name())
 		s.gvkToType[gvk] = t
 		s.typeToGVK[t] = append(s.typeToGVK[t], gvk)
@@ -189,7 +219,9 @@ func (s *Scheme) AddKnownTypes(gv schema.GroupVersion, types ...Object) {
 // be encoded as. Useful for testing when you don't want to make multiple packages to define
 // your structs. Version may not be empty - use the APIVersionInternal constant if you have a
 // type that does not have a formal version.
+//添加gvk克资源对象定义的相互映射
 func (s *Scheme) AddKnownTypeWithName(gvk schema.GroupVersionKind, obj Object) {
+	//获得object对应的资源对象定义
 	t := reflect.TypeOf(obj)
 	if len(gvk.Version) == 0 {
 		panic(fmt.Sprintf("version is required on all types: %s %v", gvk, t))
@@ -207,6 +239,7 @@ func (s *Scheme) AddKnownTypeWithName(gvk schema.GroupVersionKind, obj Object) {
 }
 
 // KnownTypes returns the types known for the given version.
+//获得指定apiGroup对应的资源类型以及资源对象定义
 func (s *Scheme) KnownTypes(gv schema.GroupVersion) map[string]reflect.Type {
 	types := make(map[string]reflect.Type)
 	for gvk, t := range s.gvkToType {
@@ -275,6 +308,13 @@ func (s *Scheme) IsUnversioned(obj Object) (bool, bool) {
 
 // New returns a new API object of the given version and name, or an error if it hasn't
 // been registered. The version and kind fields must be specified.
+//根据指定的GVK获得资源类型,并创建相应资源对象
+/*
+如gvk := schema.GroupVersionKind{Group:"",Version:"v1",Kind:"Pod"},对应的类型是v1.Pod
+ obj, err := pkg/api.Scheme.New(gvk)
+ 将会创建一个v1.Pod对象,并返回其指针
+ &Pod{ObjectMeta:ObjectMeta{Name:,GenerateName:,Namespace:,SelfLink:,UID:,ResourceVersion:,Generation:0,CreationTimestamp:0001-01-01 00:00:00 +0000 UTC,DeletionTimestamp:<nil>,DeletionGracePeriodSeconds:nil,Labels:map[string]string{},Annotations:map[string]string{},OwnerReferences:[],Finalizers:[],ClusterName:,},Spec:PodSpec{Volumes:[],Containers:[],RestartPolicy:,TerminationGracePeriodSeconds:nil,ActiveDeadlineSeconds:nil,DNSPolicy:,NodeSelector:map[string]string{},ServiceAccountName:,DeprecatedServiceAccount:,NodeName:,HostNetwork:false,HostPID:false,HostIPC:false,SecurityContext:nil,ImagePullSecrets:[],Hostname:,Subdomain:,Affinity:nil,},Status:PodStatus{Phase:,Conditions:[],Message:,Reason:,HostIP:,PodIP:,StartTime:<nil>,ContainerStatuses:[],QOSClass:,},}
+*/
 func (s *Scheme) New(kind schema.GroupVersionKind) (Object, error) {
 	if t, exists := s.gvkToType[kind]; exists {
 		return reflect.New(t).Interface().(Object), nil
@@ -419,6 +459,7 @@ func (s *Scheme) RegisterInputDefaults(in interface{}, fn conversion.FieldMappin
 //		}
 //	},
 // )
+//添加scheme相关资源的默认处理函数
 func (s *Scheme) AddDefaultingFuncs(defaultingFuncs ...interface{}) error {
 	for _, f := range defaultingFuncs {
 		err := s.converter.RegisterDefaultingFunc(f)

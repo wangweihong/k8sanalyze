@@ -46,6 +46,7 @@ const (
 
 // Config holds the common attributes that can be passed to a Kubernetes client on
 // initialization.
+//见pkg/client/restclient/config.go中RESTClientFor(cfg)如何利用Config生成restClient
 type Config struct {
 	// Host must be a host string, a host:port pair, or a URL to the base of the apiserver.
 	// If a URL is given then the (optional) Path of that URL represents a prefix that must
@@ -53,6 +54,8 @@ type Config struct {
 	// proxy to easily relocate all of the apiserver endpoints.
 	Host string
 	// APIPath is a sub-path that points to an API root.
+	//k8s.io/kubernetes/pkg/client/restclient/url_utils.go
+	//defaultServerUrlFor,根据APIPath生成URL路径
 	APIPath string
 	// Prefix is the sub path of the server. If not specified, the client will set
 	// a default value.  Use "/" to indicate the server root should be used
@@ -60,6 +63,7 @@ type Config struct {
 
 	// ContentConfig contains settings that affect how objects are transformed when
 	// sent to the server.
+	//见RESTClientFor,必须设置ContentConfig.GroupVersion,否则无法创建restClient
 	ContentConfig
 
 	// Server requires Basic authentication
@@ -165,7 +169,8 @@ type ContentConfig struct {
 	GroupVersion *schema.GroupVersion
 	// NegotiatedSerializer is used for obtaining encoders and decoders for multiple
 	// supported media types.
-	NegotiatedSerializer runtime.NegotiatedSerializer
+	//实现k8s.io/kubernetes/pkg/api/register.go的Codec
+	NegotiatedSerializer runtime.NegotiatedSerializer //解析json/yaml格式资源数据
 }
 
 // RESTClientFor returns a RESTClient that satisfies the requested attributes on a client Config
@@ -173,6 +178,8 @@ type ContentConfig struct {
 // A RESTClient created by this method is generic - it expects to operate on an API that follows
 // the Kubernetes conventions, but may not be the Kubernetes API.
 func RESTClientFor(config *Config) (*RESTClient, error) {
+
+	//
 	if config.GroupVersion == nil {
 		return nil, fmt.Errorf("GroupVersion is required when initializing a RESTClient")
 	}
@@ -188,6 +195,7 @@ func RESTClientFor(config *Config) (*RESTClient, error) {
 		burst = DefaultBurst
 	}
 
+	//hostURL: https://<ip:port>或者http://<ip:port>解析, versionedAPIPath:/api/<group>/<version>或者/apis/<group>/version,如/apis/batch/v2alpha1
 	baseURL, versionedAPIPath, err := defaultServerUrlFor(config)
 	if err != nil {
 		return nil, err

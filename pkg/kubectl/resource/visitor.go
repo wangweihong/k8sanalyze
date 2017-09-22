@@ -47,7 +47,9 @@ const (
 )
 
 // Visitor lets clients walk a list of resources.
-//实现StreamVisitor
+//
+//因为Visitor会被层层Visitor封装.
+//但调用顺序是最底层的Visitor,依次往外走
 type Visitor interface {
 	Visit(VisitorFunc) error
 }
@@ -73,15 +75,19 @@ type ResourceMapping interface {
 
 // Info contains temporary info to execute a REST call, or show the results
 // of an already completed REST call.
+//初始化见k8s.io/kubernetes/pkg/kubectl/resource/mapper.go的InfoForData()
+//测试参考:https://note.youdao.com/web/#/file/WEB2cb3ce540ae0e769d32485250d11127a/markdown/WEBc9e9d1ea1f005e47d2fd8a5ac87e5ec3
+//这里是执行Result.Infos(),遍历Result的visitors后, 生成的用于向apiserver发送的http请求的临时信息
+//每一项资源对应一个Info
 type Info struct {
-	Client    RESTClient
+	Client    RESTClient //RESTClient,
 	Mapping   *meta.RESTMapping
 	Namespace string //namespace
-	Name      string //?资源名?
+	Name      string //资源名
 
 	// Optional, Source is the filename or URL to template file (.json or .yaml),
 	// or stdin to use to handle the resource
-	Source string //文件名/URL路径
+	Source string //文件名/URL路径对,只有通过文件传入的resource data才有值
 	// Optional, this is the provided object in a versioned type before defaulting
 	// and conversions into its corresponding internal type. This is useful for
 	// reflecting on user intent which may be lost after defaulting and conversions.
@@ -92,7 +98,9 @@ type Info struct {
 
 	// Optional, this is the most recent value returned by the server if available
 	//同上
-	Object runtime.Object
+	//解析一个普通yaml的输出结果:&TypeMeta{Kind:,APIVersion:,}
+	//这个有什么作用?
+	Object runtime.Object //解析后的第一个对象
 	// Optional, this is the most recent resource version the server knows about for
 	// this type of resource. It may not match the resource version of the object,
 	// but if set it should be equal to or newer than the resource version of the
@@ -119,6 +127,7 @@ func (i *Info) Visit(fn VisitorFunc) error {
 }
 
 // Get retrieves the object from the Namespace and Name fields
+//像apiserver获取info中相关object的信息
 func (i *Info) Get() (err error) {
 	//
 	obj, err := NewHelper(i.Client, i.Mapping).Get(i.Namespace, i.Name, i.Export)
@@ -139,6 +148,7 @@ func (i *Info) Get() (err error) {
 // Refresh updates the object with another object. If ignoreError is set
 // the Object will be updated even if name, namespace, or resourceVersion
 // attributes cannot be loaded from the object.
+//根据object,更新Info中的object
 func (i *Info) Refresh(obj runtime.Object, ignoreError bool) error {
 	name, err := i.Mapping.MetadataAccessor.Name(obj)
 	if err != nil {
@@ -188,6 +198,7 @@ func (i *Info) ResourceMapping() *meta.RESTMapping {
 type VisitorList []Visitor
 
 // Visit implements Visitor
+//visitor出错则直接返回
 func (l VisitorList) Visit(fn VisitorFunc) error {
 	for i := range l {
 		if err := l[i].Visit(fn); err != nil {
@@ -199,6 +210,7 @@ func (l VisitorList) Visit(fn VisitorFunc) error {
 
 // EagerVisitorList implements Visit for the sub visitors it contains. All errors
 // will be captured and returned at the end of iteration.
+//visitor出错,不会直接退出,在最后再返回
 type EagerVisitorList []Visitor
 
 // Visit implements Visitor, and gathers errors that occur during processing until
@@ -234,12 +246,14 @@ func ValidateSchema(data []byte, schema validation.Schema) error {
 
 // URLVisitor downloads the contents of a URL, and if successful, returns
 // an info object representing the downloaded object.
+//visit时访问URL获取资源数据
 type URLVisitor struct {
 	URL *url.URL
 	*StreamVisitor
 	HttpAttemptCount int
 }
 
+//
 func (v *URLVisitor) Visit(fn VisitorFunc) error {
 	body, err := readHttpWithRetries(httpgetImpl, time.Second, v.URL.String(), v.HttpAttemptCount)
 	if err != nil {
@@ -257,6 +271,7 @@ func readHttpWithRetries(get httpget, duration time.Duration, u string, attempts
 	if attempts <= 0 {
 		return nil, fmt.Errorf("http attempts must be greater than 0, was %d", attempts)
 	}
+	//尝试指定的次数
 	for i := 0; i < attempts; i++ {
 		var statusCode int
 		var status string
@@ -304,7 +319,7 @@ func httpgetImpl(url string) (int, string, io.ReadCloser, error) {
 // passed to Visit. An error will terminate the visit.
 type DecoratedVisitor struct {
 	visitor    Visitor
-	decorators []VisitorFunc
+	decorators []VisitorFunc //装饰函数,会对Info中的对象进行更改namespace等操作
 }
 
 // NewDecoratedVisitor will create a visitor that invokes the provided visitor functions before
@@ -318,6 +333,7 @@ func NewDecoratedVisitor(v Visitor, fn ...VisitorFunc) Visitor {
 }
 
 // Visit implements Visitor
+//
 func (v DecoratedVisitor) Visit(fn VisitorFunc) error {
 	return v.visitor.Visit(func(info *Info, err error) error {
 		if err != nil {
@@ -388,6 +404,7 @@ func (v FlattenListVisitor) Visit(fn VisitorFunc) error {
 		if err != nil {
 			return err
 		}
+		//??
 		if info.Object == nil {
 			return fn(info, nil)
 		}
@@ -517,8 +534,8 @@ type StreamVisitor struct {
 	io.Reader //数据读入
 	*Mapper   //这个的作用?
 
-	Source string //资源名??
-	Schema validation.Schema
+	Source string            //资源名
+	Schema validation.Schema //用于检测
 }
 
 // NewStreamVisitor is a helper function that is useful when we want to change the fields of the struct but keep calls the same.
@@ -533,6 +550,7 @@ func NewStreamVisitor(r io.Reader, mapper *Mapper, source string, schema validat
 
 // Visit implements Visitor over a stream. StreamVisitor is able to distinct multiple resources in one stream.
 //解析输入流内容
+//真正处理数据,然后将生成的resource.Info交由交由其他装饰visitor去处理
 func (v *StreamVisitor) Visit(fn VisitorFunc) error {
 	//创建一个解析器来解析传递过来的数据流
 	d := yaml.NewYAMLOrJSONDecoder(v.Reader, 4096)
@@ -546,17 +564,19 @@ func (v *StreamVisitor) Visit(fn VisitorFunc) error {
 			return err
 		}
 		// TODO: This needs to be able to handle object in other encodings and schemas.
+		//去除空数据
 		ext.Raw = bytes.TrimSpace(ext.Raw)
 		if len(ext.Raw) == 0 || bytes.Equal(ext.Raw, []byte("null")) {
 			continue
 		}
-		//检查是否合法?
+		//检查是否合法
 		if err := ValidateSchema(ext.Raw, v.Schema); err != nil {
 			return fmt.Errorf("error validating %q: %v", v.Source, err)
 		}
-		//
+		//解析数据,构建成一个resource.Info对象
 		info, err := v.InfoForData(ext.Raw, v.Source)
 		if err != nil {
+			//调用装饰器函数
 			if fnErr := fn(info, err); fnErr != nil {
 				return fnErr
 			}
@@ -568,7 +588,7 @@ func (v *StreamVisitor) Visit(fn VisitorFunc) error {
 	}
 }
 
-//更新Info中包含的资源对象的namespace
+//更新Info中包含的runtime object的namespace
 func UpdateObjectNamespace(info *Info, err error) error {
 	if err != nil {
 		return err
@@ -593,6 +613,7 @@ func FilterNamespace(info *Info, err error) error {
 
 // SetNamespace ensures that every Info object visited will have a namespace
 // set. If info.Object is set, it will be mutated as well.
+//更新Info中的namespace
 func SetNamespace(namespace string) VisitorFunc {
 	return func(info *Info, err error) error {
 		if err != nil {
@@ -635,6 +656,7 @@ func RequireNamespace(namespace string) VisitorFunc {
 
 // RetrieveLatest updates the Object on each Info by invoking a standard client
 // Get.
+//
 func RetrieveLatest(info *Info, err error) error {
 	if err != nil {
 		return err
@@ -694,6 +716,7 @@ func (v FilteredVisitor) Visit(fn VisitorFunc) error {
 	})
 }
 
+//检测标签是否匹配
 func FilterBySelector(s labels.Selector) FilterFunc {
 	return func(info *Info, err error) (bool, error) {
 		if err != nil {

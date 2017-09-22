@@ -31,7 +31,7 @@ import (
 )
 
 // ConfigAccess is used by subcommands and methods in this package to load and modify the appropriate config files
-//用于指定要修改配置时,修改哪个文件?
+//用于指定要修改配置时,修改哪个文件
 type ConfigAccess interface {
 	// GetLoadingPrecedence returns the slice of files that should be used for loading and inspecting the config
 	GetLoadingPrecedence() []string //加载文件的顺序表
@@ -469,6 +469,7 @@ func getConfigFromFile(filename string) (*clientcmdapi.Config, error) {
 }
 
 // GetConfigFromFileOrDie tries to read a kubeconfig file and if it can't, it calls exit.  One exception, missing files result in empty configs, not an exit
+//通过指定配合文件,加载kubectl
 func GetConfigFromFileOrDie(filename string) *clientcmdapi.Config {
 	config, err := getConfigFromFile(filename)
 	if err != nil {

@@ -139,6 +139,7 @@ func addFastPathConversionFuncs(scheme *runtime.Scheme) error {
 	return nil
 }
 
+//
 func addConversionFuncs(scheme *runtime.Scheme) error {
 	// Add non-generated conversion functions
 	err := scheme.AddConversionFuncs(

@@ -29,7 +29,8 @@ import (
 // Helper provides methods for retrieving or mutating a RESTful
 // resource.
 //提供方法来检索和改变RESTful资源
-//提供方法去向apiserver创建,删除,更新资
+//提供方法去向apiserver创建,删除,获取资源
+//利用RESTClient发起请求
 type Helper struct {
 	// The name of this resource as the server would recognize it
 	Resource string //k8s resource名(不是资源类型(resource kind,如Pod),而是pods/exec,pods/log这些???
@@ -37,9 +38,10 @@ type Helper struct {
 	RESTClient RESTClient
 	// An interface for reading or writing the resource version of this
 	// type.
-	Versioner runtime.ResourceVersioner
+	Versioner runtime.ResourceVersioner //访问resource元数据
 	// True if the resource type is scoped to namespaces
-	NamespaceScoped bool //命名空间作用域?
+	NamespaceScoped bool //判断是否有命名空间的资源,像namespace,event这些资源是没有命名空间划分的
+	//true表示是有命名空间的资源
 }
 
 // NewHelper creates a Helper from a ResourceMapping

@@ -24,6 +24,8 @@ import (
 
 // RESTClient is a client helper for dealing with RESTful resources
 // in a generic way.
+//见k8s.io/kubernetes/pkg/kubectl/cmd/util/factory_object_mapping.go的ClientForMapping()
+//上面也是个接口,底层实现是k8s.io/kubernetes/pkg/client/restclient/client.go的RESTClient.
 type RESTClient interface {
 	Get() *client.Request
 	Post() *client.Request

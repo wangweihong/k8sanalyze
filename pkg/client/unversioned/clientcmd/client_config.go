@@ -80,7 +80,7 @@ type DirectClientConfig struct {
 	contextName    string              //指定所使用的context,如果为空,则使用config.CurrentContext.
 	overrides      *ConfigOverrides    //用于覆盖config字段中的内容
 	fallbackReader io.Reader           //输入数据
-	configAccess   ConfigAccess
+	configAccess   ConfigAccess        //指定处理哪一个配置文件
 	// promptedCredentials store the credentials input by the user
 	promptedCredentials promptedCredentials
 }
@@ -119,7 +119,7 @@ func (config *DirectClientConfig) ClientConfig() (*restclient.Config, error) {
 		return nil, err
 	}
 
-	//获得
+	//获得上下文
 	_, err = config.getContext()
 	if err != nil {
 		return nil, err

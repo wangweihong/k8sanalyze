@@ -26,6 +26,7 @@ import (
 )
 
 // MultiRESTMapper is a wrapper for multiple RESTMappers.
+//这个实现了RESTMapper interface,其作用是遍历所有的RESTMapper,执行相应的方法
 type MultiRESTMapper []RESTMapper
 
 func (m MultiRESTMapper) String() string {

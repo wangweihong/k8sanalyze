@@ -79,6 +79,9 @@ type APIRegistrationManager struct {
 	// KUBE_API_VERSIONS environment variable. The install package of each group
 	// checks this list before add their versions to the latest package and
 	// Scheme.  This list is small and order matters, so represent as a slice
+	//IsAllowedVersion()用于在各apigroup注册默认的apiverion时检测version是否允许
+	//这个会影响到DefaultRESTMaper创建时的默认版本号
+	//见pkg/api/install/install.go
 	envRequestedVersions []schema.GroupVersion //KUBE_API_VERSIONS中指定的版本
 }
 
@@ -190,6 +193,7 @@ func (m *APIRegistrationManager) EnableVersions(versions ...schema.GroupVersion)
 // IsAllowedVersion returns if the version is allowed by the KUBE_API_VERSIONS
 // environment variable. If the environment variable is empty, then it always
 // returns true.
+//
 func (m *APIRegistrationManager) IsAllowedVersion(v schema.GroupVersion) bool {
 	if len(m.envRequestedVersions) == 0 {
 		return true
@@ -366,6 +370,7 @@ func (m *APIRegistrationManager) RESTMapper(versionPatterns ...schema.GroupVersi
 		return meta.PriorityRESTMapper{Delegate: unionMapper, ResourcePriority: resourcePriority, KindPriority: kindPriority}
 	}
 
+	//???
 	if len(m.envRequestedVersions) != 0 {
 		resourcePriority := []schema.GroupVersionResource{}
 		kindPriority := []schema.GroupVersionKind{}

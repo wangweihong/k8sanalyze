@@ -35,8 +35,10 @@ func Resource(resource string) schema.GroupResource {
 }
 
 var (
+	//scheme buider构建器.注册函数指针集到SchemeBuilder中.
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes, addDefaultingFuncs, addConversionFuncs, addFastPathConversionFuncs)
-	AddToScheme   = SchemeBuilder.AddToScheme
+	//依次对scheme进行SchemeBuilder中的函数处理
+	AddToScheme = SchemeBuilder.AddToScheme
 )
 
 // Adds the list of known types to api.Scheme.

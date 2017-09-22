@@ -89,6 +89,8 @@ const (
 // +k8s:deepcopy-gen=true
 // +protobuf=true
 // +k8s:openapi-gen=true
+//没有理解这块? Version structed
+//和thirdparty resource有关??
 type RawExtension struct {
 	// Raw is the underlying serialization of this object.
 	//

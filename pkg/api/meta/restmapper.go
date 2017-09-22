@@ -76,8 +76,9 @@ resource要区分单复数，是为了获取Pods信息。比如可以kubectl get
 //参考下面KindToResource
 //实现了RESTMapper interface
 type DefaultRESTMapper struct {
-	//默认api group versoin
-	defaultGroupVersions []schema.GroupVersion
+	//默认api group versoin,在创建时,通过参数传递
+	//每个apigroup在注册时(如pkg/api/install/install.go),通过静态定义的方式定义的availabel apigroup Versions中,经过APIRegistrationManager允许的版本,在创建DefaultRESTMapper时,传递了该参数
+	defaultGroupVersions []schema.GroupVersion //api组支持的api version,由api组静态定义所支持额api version
 
 	resourceToKind       map[schema.GroupVersionResource]schema.GroupVersionKind     //资源到资源类型的映射
 	kindToPluralResource map[schema.GroupVersionKind]schema.GroupVersionResource     //资源类型到资源的映射
@@ -85,7 +86,10 @@ type DefaultRESTMapper struct {
 	singularToPlural     map[schema.GroupVersionResource]schema.GroupVersionResource //单数到复数?
 	pluralToSingular     map[schema.GroupVersionResource]schema.GroupVersionResource //复数到单数?
 
-	interfacesFunc VersionInterfacesFunc
+	//存在两个作用
+	//1.更新/获取runtime.Object的元数据
+	//2.将runtime.Object从一个版本转换成另一个版本
+	interfacesFunc VersionInterfacesFunc //也是在创建时,通过参数传递的,并且apigroup注册时(pkg/api/install/install.go中定义其实现的的
 
 	// aliasToResource is used for mapping aliases to resources
 	aliasToResource map[string][]string //资源的别名???
@@ -107,7 +111,7 @@ type VersionInterfacesFunc func(version schema.GroupVersion) (*VersionInterfaces
 // to search when an object has no default version (set empty to return an error),
 // and a function that retrieves the correct metadata for a given version.
 //调用参考k8s.io/kubernetes/pkg/api/mapper.go
-//
+//基本上所有的RESTMapper的实现都是基于这个的
 func NewDefaultRESTMapper(defaultGroupVersions []schema.GroupVersion, f VersionInterfacesFunc) *DefaultRESTMapper {
 	resourceToKind := make(map[schema.GroupVersionResource]schema.GroupVersionKind)
 	kindToPluralResource := make(map[schema.GroupVersionKind]schema.GroupVersionResource)
@@ -508,17 +512,22 @@ func (m *DefaultRESTMapper) RESTMappings(gk schema.GroupKind, versions ...string
 	hadVersion := false
 
 	// Pick an appropriate version
+	//遍历传递的版本
 	for _, version := range versions {
 		if len(version) == 0 || version == runtime.APIVersionInternal {
 			continue
 		}
+		//获得版本相关的gvk
 		currGVK := gk.WithVersion(version)
 		hadVersion = true
+		//确认该resource kind是否有相应的资源
+		//找到了默认的版本?
 		if _, ok := m.kindToPluralResource[currGVK]; ok {
 			potentialGVK = append(potentialGVK, currGVK)
 			break
 		}
 	}
+	//没有找到默认的apigroup/version/kind,将指定apigroup所有verion
 	// Use the default preferred versions
 	if !hadVersion && len(potentialGVK) == 0 {
 		for _, gv := range m.defaultGroupVersions {
@@ -529,6 +538,7 @@ func (m *DefaultRESTMapper) RESTMappings(gk schema.GroupKind, versions ...string
 		}
 	}
 
+	//没有找到默认的版本
 	if len(potentialGVK) == 0 {
 		return nil, &NoKindMatchError{PartialKind: gk.WithVersion("")}
 	}

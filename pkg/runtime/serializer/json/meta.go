@@ -25,6 +25,7 @@ import (
 
 // MetaFactory is used to store and retrieve the version and kind
 // information for JSON objects in a serializer.
+//解析资源数据获取其中的GVK
 type MetaFactory interface {
 	// Interpret should return the version and kind of the wire-format of
 	// the object.
@@ -45,6 +46,7 @@ type SimpleMetaFactory struct {
 
 // Interpret will return the APIVersion and Kind of the JSON wire-format
 // encoding of an object, or an error.
+//解析资源描述数据,获取相应的apigroupVersion,resource kind
 func (SimpleMetaFactory) Interpret(data []byte) (*schema.GroupVersionKind, error) {
 	findKind := struct {
 		// +optional

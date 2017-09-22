@@ -123,9 +123,11 @@ func (f *ring1Factory) ClientForMapping(mapping *meta.RESTMapping) (resource.RES
 	if err != nil {
 		return nil, err
 	}
+	//设置restclient.Config配置信息
 	if err := client.SetKubernetesDefaults(cfg); err != nil {
 		return nil, err
 	}
+	//配置restclient.config的apipath
 	gvk := mapping.GroupVersionKind
 	switch gvk.Group {
 	case federation.GroupName:
@@ -138,9 +140,11 @@ func (f *ring1Factory) ClientForMapping(mapping *meta.RESTMapping) (resource.RES
 	}
 	gv := gvk.GroupVersion()
 	cfg.GroupVersion = &gv
+	//如果apigroup/version是否第三方资源版本,则更改配置中的资源数据序列化器
 	if registered.IsThirdPartyAPIGroupVersion(gvk.GroupVersion()) {
 		cfg.NegotiatedSerializer = thirdpartyresourcedata.NewNegotiatedSerializer(api.Codecs, gvk.Kind, gv, gv)
 	}
+	//根据配置生成RESTClient
 	return restclient.RESTClientFor(cfg)
 }
 

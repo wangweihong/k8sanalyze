@@ -27,14 +27,15 @@ import (
 // serializerExtensions are for serializers that are conditionally compiled in
 var serializerExtensions = []func(*runtime.Scheme) (serializerType, bool){}
 
+//内容格式
 type serializerType struct {
 	AcceptContentTypes []string
-	ContentType        string
+	ContentType        string //
 	FileExtensions     []string
 	// EncodesAsText should be true if this content type can be represented safely in UTF-8
 	EncodesAsText bool
 
-	Serializer       runtime.Serializer
+	Serializer       runtime.Serializer //序列化器
 	PrettySerializer runtime.Serializer
 
 	AcceptStreamContentTypes []string
@@ -220,7 +221,7 @@ type DirectCodecFactory struct {
 	CodecFactory
 }
 
-// EncoderForVersion returns an encoder that does not do conversion.
+// Enc实oderForVersion returns an encoder that does not do conversion.
 func (f DirectCodecFactory) EncoderForVersion(serializer runtime.Encoder, version runtime.GroupVersioner) runtime.Encoder {
 	return versioning.DirectEncoder{
 		Version:     version,

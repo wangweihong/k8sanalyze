@@ -36,17 +36,20 @@ import (
 type ErrMatchFunc func(error) bool
 
 // Result contains helper methods for dealing with the outcome of a Builder.
+//见pkg/kubectl/resource/builder.go的Do()
 type Result struct {
-	err     error
-	visitor Visitor
+	err error //出错信息,参考pkg/kubectl/resource/builder.go的visitByPaths()
+	//记录visitor执行时出现的错误
+	visitor Visitor //见Do(),封装后的visitor
 
-	sources  []Visitor
-	singular bool
+	sources  []Visitor //原始[]visitor
+	singular bool      // !b.dir && !b.stream && len(b.paths) == 1,见visitByPaths()
 
 	ignoreErrors []utilerrors.Matcher
 
 	// populated by a call to Infos
-	info []*Info
+	//注意Info也是一个Visitor
+	info []*Info //请求的数据.一开始为空,调用Infos()后遍历visitor链生成info后添加.
 }
 
 // IgnoreErrors will filter errors that occur when by visiting the result
@@ -92,6 +95,8 @@ func (r *Result) IntoSingular(b *bool) *Result {
 // Infos returns an array of all of the resource infos retrieved via traversal.
 // Will attempt to traverse the entire set of visitors only once, and will return
 // a cached list on subsequent calls.
+//这里的就是调用builder构造的Visitor链来创建Info对象
+//根据visitor的不同,有些visitor会在Info()调用者向apiserver发起查询请求
 func (r *Result) Infos() ([]*Info, error) {
 	if r.err != nil {
 		return nil, r.err
@@ -100,7 +105,11 @@ func (r *Result) Infos() ([]*Info, error) {
 		return r.info, nil
 	}
 
+	//如果没有资源信息,则调用所有的visitors..
 	infos := []*Info{}
+	//提交资源数据时实际的调用顺序,参考Do
+	//StreamVisitor()<-URL/FileVisitor() <-Deco
+	//遍历visitors,将生成的info添加到infos
 	err := r.visitor.Visit(func(info *Info, err error) error {
 		if err != nil {
 			return err
@@ -108,6 +117,7 @@ func (r *Result) Infos() ([]*Info, error) {
 		infos = append(infos, info)
 		return nil
 	})
+	//visitor出现
 	err = utilerrors.FilterOut(err, r.ignoreErrors...)
 
 	r.info, r.err = infos, err
@@ -128,6 +138,7 @@ func (r *Result) Object() (runtime.Object, error) {
 
 	versions := sets.String{}
 	objects := []runtime.Object{}
+	//遍历inos
 	for _, info := range infos {
 		if info.Object != nil {
 			objects = append(objects, info.Object)

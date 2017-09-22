@@ -32,6 +32,7 @@ import (
 
 // NewSerializer creates a JSON serializer that handles encoding versioned objects into the proper JSON form. If typer
 // is not nil, the object has the group, version, and kind fields set.
+//Json序列化器
 func NewSerializer(meta MetaFactory, creater runtime.ObjectCreater, typer runtime.ObjectTyper, pretty bool) *Serializer {
 	return &Serializer{
 		meta:    meta,
@@ -45,6 +46,7 @@ func NewSerializer(meta MetaFactory, creater runtime.ObjectCreater, typer runtim
 // NewYAMLSerializer creates a YAML serializer that handles encoding versioned objects into the proper YAML form. If typer
 // is not nil, the object has the group, version, and kind fields set. This serializer supports only the subset of YAML that
 // matches JSON, and will error if constructs are used that do not serialize to JSON.
+//Yaml序列化器
 func NewYAMLSerializer(meta MetaFactory, creater runtime.ObjectCreater, typer runtime.ObjectTyper) *Serializer {
 	return &Serializer{
 		meta:    meta,
@@ -54,11 +56,14 @@ func NewYAMLSerializer(meta MetaFactory, creater runtime.ObjectCreater, typer ru
 	}
 }
 
+//序列化器
+//k8s.io/kubernetes/pkg/runtime/serializer/codec_factory.go的newSerializersForScheme()
+//create和typer都是传递的runtime.Scheme
 type Serializer struct {
-	meta    MetaFactory
-	creater runtime.ObjectCreater
+	meta    MetaFactory           //见k8s.io/kubernetes/pkg/runtime/serializer/json/meta.go的SimpleMetaFactory(),解析资源数据,以获得相应的GVK
+	creater runtime.ObjectCreater //根据GVK创建相应资源对象
 	typer   runtime.ObjectTyper
-	yaml    bool
+	yaml    bool //表明是json还是yaml
 	pretty  bool
 }
 
@@ -82,6 +87,7 @@ func (s *Serializer) Decode(originalData []byte, gvk *schema.GroupVersionKind, i
 		return versioned, actual, nil
 	}
 
+	//转换yaml成为jsnn
 	data := originalData
 	if s.yaml {
 		altered, err := yaml.YAMLToJSON(data)
@@ -91,11 +97,14 @@ func (s *Serializer) Decode(originalData []byte, gvk *schema.GroupVersionKind, i
 		data = altered
 	}
 
+	//获得数据中的GVK
 	actual, err := s.meta.Interpret(data)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	//指定了GVK
+	//补全actualGVK中缺失部分
 	if gvk != nil {
 		// apply kind and version defaulting from provided default
 		if len(actual.Kind) == 0 {
@@ -110,6 +119,7 @@ func (s *Serializer) Decode(originalData []byte, gvk *schema.GroupVersionKind, i
 		}
 	}
 
+	//???
 	if unk, ok := into.(*runtime.Unknown); ok && unk != nil {
 		unk.Raw = originalData
 		unk.ContentType = runtime.ContentTypeJSON

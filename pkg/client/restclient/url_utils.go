@@ -27,6 +27,7 @@ import (
 // DefaultServerURL converts a host, host:port, or URL string to the default base server API path
 // to use with a Client at a given API version following the standard conventions for a
 // Kubernetes API.
+//hostURL: https://<ip:port>或者http://<ip:port>解析, versionedAPIPath:/api/<group>/<version>或者/apis/<group>/version,如/apis/batch/v2alpha1
 func DefaultServerURL(host, apiPath string, groupVersion schema.GroupVersion, defaultTLS bool) (*url.URL, string, error) {
 	if host == "" {
 		return nil, "", fmt.Errorf("host must be a URL or a host:port pair")
@@ -72,6 +73,7 @@ func DefaultServerURL(host, apiPath string, groupVersion schema.GroupVersion, de
 
 // defaultServerUrlFor is shared between IsConfigTransportTLS and RESTClientFor. It
 // requires Host and Version to be set prior to being called.
+//hostURL: https://<ip:port>或者http://<ip:port>解析, versionedAPIPath:/api/<group>/<version>或者/apis/<group>/version,如/apis/batch/v2alpha1
 func defaultServerUrlFor(config *Config) (*url.URL, string, error) {
 	// TODO: move the default to secure when the apiserver supports TLS by default
 	// config.Insecure is taken to mean "I want HTTPS but don't bother checking the certs against a CA."

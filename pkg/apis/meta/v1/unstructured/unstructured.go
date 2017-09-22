@@ -41,6 +41,7 @@ import (
 // type if you are dealing with objects that are not in the server meta v1 schema.
 //
 // TODO: make the serialization part of this type distinct from the field accessors.
+//??处理不是来自golang struct的对象?
 type Unstructured struct {
 	// Object is a JSON compatible map with string, float, int, bool, []interface{}, or
 	// map[string]interface{}

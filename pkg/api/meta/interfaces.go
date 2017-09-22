@@ -25,7 +25,16 @@ import (
 )
 
 // VersionInterfaces contains the interfaces one should use for dealing with types of a particular version.
+//初始化由各apigroup注册时,创建RESTMapper时初始化
+/*
+如pkg/api/install/install.go的interfaceFor
+return &meta.VersionInterfaces{
+	129       ObjectConvertor:  api.Scheme,
+	130       MetadataAccessor: accessor,
+	131     }, nil
+*/
 type VersionInterfaces struct {
+	//由runtime.Scheme实现
 	runtime.ObjectConvertor //转换resource Object从一个版本到另一个版本
 	MetadataAccessor        //获取/设置一个resource object的元数据
 }
@@ -91,7 +100,7 @@ type Type metav1.Type
 // a default value.
 //
 // MetadataAccessor exposes Interface in a way that can be used with multiple objects.
-//访问resource的元数据
+//访问/更改resource的元数据
 //k8s.io/kubernetes/pkg/api/meta/meta.go的resourceAccessor实现了这个interface
 type MetadataAccessor interface {
 	APIVersion(obj runtime.Object) (string, error)
@@ -128,8 +137,8 @@ type RESTScopeName string
 
 //RESTScopeRoot指那些像Node,Namespace,PersistentVolume这些没有namspace的对象的作用域
 const (
-	RESTScopeNameNamespace RESTScopeName = "namespace"
-	RESTScopeNameRoot      RESTScopeName = "root"
+	RESTScopeNameNamespace RESTScopeName = "namespace" //有命名空间的资源
+	RESTScopeNameRoot      RESTScopeName = "root"      //没有命名空间
 )
 
 // RESTScope contains the information needed to deal with REST resources that are in a resource hierarchy
@@ -157,11 +166,12 @@ type RESTScope interface {
 //k8s.io/kubernetes/pkg/kubectl/resource/interfaces.go 中ClientMapper,根据RESTMapping生成一个RESTClient(包含url,以及http.Client)
 //猜想,一个resource object在不同版本的apiserver中其apigroup/version是不同的,apiserver处理该资源的URL也是不同的.
 //因此RESTMapping根据从服务端获得的信息,将资源转换成特定的URL格式,让http.Client提供进行请求
+//测试方法:参考https://note.youdao.com/web/#/file/WEB2cb3ce540ae0e769d32485250d11127a/markdown/WEBc9e9d1ea1f005e47d2fd8a5ac87e5ec3
 type RESTMapping struct {
 	// Resource is a string representing the name of this resource as a REST client would see it
-	Resource string //资源的名字
+	Resource string //资源的名字, 例如pods
 
-	GroupVersionKind schema.GroupVersionKind //api组版本,对象类型
+	GroupVersionKind schema.GroupVersionKind //api组版本,对象类型 //例如输出的结果为:"/v1, Kind=Pod"
 
 	// Scope contains the information needed to deal with REST Resources that are in a resource hierarchy
 	// 根据有无namespace，对象分为两类：RESTScopeNamespace和RESTScopeRoot
@@ -199,6 +209,7 @@ type RESTMapper interface {
 	ResourcesFor(input schema.GroupVersionResource) ([]schema.GroupVersionResource, error)
 
 	// RESTMapping identifies a preferred resource mapping for the provided group kind.
+	//根据gk,version获得相应的RESTMapping
 	RESTMapping(gk schema.GroupKind, versions ...string) (*RESTMapping, error)
 	// RESTMappings returns all resource mappings for the provided group kind if no
 	// version search is provided. Otherwise identifies a preferred resource mapping for

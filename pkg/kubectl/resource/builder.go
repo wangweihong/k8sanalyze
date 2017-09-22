@@ -41,39 +41,46 @@ const defaultHttpGetAttempts int = 3
 // Builder provides convenience functions for taking arguments and parameters
 // from the command line and converting them to a list of resources to iterate
 // over using the Visitor interface.
-//主要作用是将命令行参数转换成资源?
+//字段的互斥性见b.visitorResult()
+//Builder最重要的是执行Do()生成Result时,根据Builder的字段设置构建各种各样的Visitor链,并保存在Result对象中!
+//
 type Builder struct {
-	mapper *Mapper //??
+	mapper *Mapper //包含RESTMapper(资源版本转换),Decoder(资源数据解析),ClientMapper(RESTMapper转成RESTClient)
 
 	errs []error
 
-	paths  []Visitor //???通过这个接口把参数转换成资源?应该是,
-	stream bool
-	dir    bool
+	//见Stream():io.Reader/Stdin():输入/URL():url/Path():文件
+	//FilenameParam()可以直接包含以上各项.
+	//由于可以同时提供自url/file/stdin的资源数据,所以需要根据来源建立不同的获取路径
+	//不能和resources/names一起使用.
+	paths  []Visitor //构建vistor练,在执行Do()后生成的Result,在执行Infos()会遍历visitor链执行visit函数.
+	stream bool      //资源来自Stdin()/Stream()
+	dir    bool      //资源来自Path()
 
-	selector  labels.Selector
-	selectAll bool
+	selector  labels.Selector //通过SelectorParam或者Selector()来指定
+	selectAll bool            //见SelectAllParam(),选择所有,注意不能和SelectParam()以及Selector()一起使用
 
-	resources []string
+	//其值赋值形式见mappingFor().==> resource.group.com
+	resources []string //见ResourceType()资源类型.注意如果调用Path()/Stdin()/URL()/FilenameParam(),就不能调用ResourceType()否则会报错.
 
-	namespace    string //指定命名空间,如果值为api.NamespaceAll(""),则请求所有namespace
-	allNamespace bool   //是否指定全部命名空间
-	names        []string
+	namespace    string   //指定命名空间,如果值为api.NamespaceAll(""),则请求所有namespace
+	allNamespace bool     //是否指定全部命名空间
+	names        []string //资源名,见ResourcesNames()
 
-	resourceTuples []resourceTuple //??
+	resourceTuples []resourceTuple //见ResourceNames().资源类型/资源名对
 
-	defaultNamespace bool //??
-	requireNamespace bool //??
+	defaultNamespace bool //如果resource data没有指定命名空间则使用namespace字段的值作为命名空间,如果指定了就是用指定的.
+	requireNamespace bool //如果resource data没有指定命名空间则使用namespace字段的值作为命名空间,如果指定了,但与namespace字段的命名空间不匹配,则报错
 
-	flatten bool
-	latest  bool
+	flatten bool //通过Flatten()指定
+	latest  bool //通过Latest()指定
 
-	requireObject bool
+	requireObject bool //通过NewBuilder()创建时,为true
 
-	singleResourceType bool
-	continueOnError    bool
+	singleResourceType bool //只能指定一种资源类型
+	continueOnError    bool //见Do(),
 
-	singular bool // 传入的FilenameOptions的Recursive为false
+	singular bool // 传入的FilenameOptions的Recursive为false. 见FilenameParam
 
 	export bool
 
@@ -96,8 +103,8 @@ func IsUsageError(err error) bool {
 }
 
 type FilenameOptions struct {
-	Filenames []string //指定多个文件名?
-	Recursive bool     //指定资源目录?
+	Filenames []string //当文件名为"-"为stdin,"https://"或者"http://"为URL,其余为路径
+	Recursive bool     //指定资源目录
 }
 
 //资源元组
@@ -114,7 +121,7 @@ func NewBuilder(mapper meta.RESTMapper, typer runtime.ObjectTyper, clientMapper 
 	}
 }
 
-//用于检测resource?
+//用于检测resource
 func (b *Builder) Schema(schema validation.Schema) *Builder {
 	b.schema = schema
 	return b
@@ -126,6 +133,9 @@ func (b *Builder) Schema(schema validation.Schema) *Builder {
 // will cause an error.
 // If ContinueOnError() is set prior to this method, objects on the path that are not
 // recognized will be ignored (but logged at V(2)).
+//这个和Steam时平行关系.既会解析Stream传入的resource data,也会解析filenameOptions指定的文件
+//这个和Path(),URL()之间的关系??
+//这是个综合性的,包含了了所有资源输入路径
 func (b *Builder) FilenameParam(enforceNamespace bool, filenameOptions *FilenameOptions) *Builder {
 	recursive := filenameOptions.Recursive
 	paths := filenameOptions.Filenames
@@ -214,6 +224,7 @@ func (b *Builder) Path(recursive bool, paths ...string) *Builder {
 			continue
 		}
 
+		//添加新的visitors
 		visitors, err := ExpandPathsToFileVisitors(b.mapper, p, recursive, FileExtensions, b.schema)
 		if err != nil {
 			b.errs = append(b.errs, fmt.Errorf("error reading %q: %v", p, err))
@@ -236,6 +247,7 @@ func (b *Builder) ResourceTypes(types ...string) *Builder {
 
 // ResourceNames accepts a default type and one or more names, and creates tuples of
 // resources
+//用来指定获取的资源类型-资源对象们
 func (b *Builder) ResourceNames(resource string, names ...string) *Builder {
 	for _, name := range names {
 		// See if this input string is of type/name format
@@ -293,6 +305,7 @@ func (b *Builder) ExportParam(export bool) *Builder {
 
 // NamespaceParam accepts the namespace that these resources should be
 // considered under from - used by DefaultNamespace() and RequireNamespace()
+//指定命名空间.
 func (b *Builder) NamespaceParam(namespace string) *Builder {
 	b.namespace = namespace
 	return b
@@ -300,6 +313,8 @@ func (b *Builder) NamespaceParam(namespace string) *Builder {
 
 // DefaultNamespace instructs the builder to set the namespace value for any object found
 // to NamespaceParam() if empty.
+//如果resource yaml/json data中没有指定namespace字段,则默认使用NamespaceParam中的namespace
+//作为该resource的namespaces.如果指定了namespace字段,则使用该字段的只作为namespace
 func (b *Builder) DefaultNamespace() *Builder {
 	b.defaultNamespace = true
 	return b
@@ -318,12 +333,16 @@ func (b *Builder) AllNamespaces(allNamespace bool) *Builder {
 // RequireNamespace instructs the builder to set the namespace value for any object found
 // to NamespaceParam() if empty, and if the value on the resource does not match
 // NamespaceParam() an error will be returned.
+//必须匹配NamespaceParam
+//如果resource yaml/json data中没有指定namespace字段,则默认使用NamespaceParam中的namespace
+//作为该resource的namespaces.如果指定了namespace字段,而且该字段不匹配NamespaceParam的值,则报错
 func (b *Builder) RequireNamespace() *Builder {
 	b.requireNamespace = true
 	return b
 }
 
 // SelectEverythingParam
+//用于选择所有的资源对象.不能和Selector()/SelectorParam()一起使用
 func (b *Builder) SelectAllParam(selectAll bool) *Builder {
 	if selectAll && b.selector != nil {
 		b.errs = append(b.errs, fmt.Errorf("setting 'all' parameter but found a non empty selector. "))
@@ -490,6 +509,7 @@ func (b *Builder) SingleResourceType() *Builder {
 
 // mappingFor returns the RESTMapping for the Kind referenced by the resource.
 // prefers a fully specified GroupVersionResource match.  If we don't have one match on GroupResource
+//解析资源类型获得RESTMapping
 func (b *Builder) mappingFor(resourceArg string) (*meta.RESTMapping, error) {
 	fullySpecifiedGVR, groupResource := schema.ParseResourceArg(resourceArg)
 	gvk := schema.GroupVersionKind{}
@@ -507,12 +527,14 @@ func (b *Builder) mappingFor(resourceArg string) (*meta.RESTMapping, error) {
 	return b.mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 }
 
+//解析资源名获得RESTMapping
 func (b *Builder) resourceMappings() ([]*meta.RESTMapping, error) {
 	if len(b.resources) > 1 && b.singleResourceType {
 		return nil, fmt.Errorf("you may only specify a single resource type")
 	}
 	mappings := []*meta.RESTMapping{}
 	for _, r := range b.resources {
+		//根据资源类型获得RESTMapping
 		mapping, err := b.mappingFor(r)
 		if err != nil {
 			return nil, err
@@ -546,40 +568,48 @@ func (b *Builder) resourceTupleMappings() (map[string]*meta.RESTMapping, error) 
 }
 
 func (b *Builder) visitorResult() *Result {
+	//如果builder在遍历resource data时存在错误
 	if len(b.errs) > 0 {
 		return &Result{err: utilerrors.NewAggregate(b.errs)}
 	}
 
+	//选择所有资源对象
 	if b.selectAll {
 		b.selector = labels.Everything()
 	}
 
 	// visit items specified by paths
+	//指定了resource path,可能是
 	if len(b.paths) != 0 {
 		return b.visitByPaths()
 	}
 
 	// visit selectors
+	//用于获取某些资源类型的全部资源数据
 	if b.selector != nil {
 		return b.visitBySelector()
 	}
 
 	// visit items specified by resource and name
+	//指定了资源类型和资源名
 	if len(b.resourceTuples) != 0 {
 		return b.visitByResource()
 	}
 
 	// visit items specified by name
+	//指定了资源名,
 	if len(b.names) != 0 {
 		return b.visitByName()
 	}
 
+	//指定了资源类型
 	if len(b.resources) != 0 {
 		return &Result{err: fmt.Errorf("resource(s) were provided, but no name, label selector, or --all flag specified")}
 	}
 	return &Result{err: missingResourceError}
 }
 
+//这里创建了一个visitor Selector,其执行visit时,会向apiserver拉取资源数据
 func (b *Builder) visitBySelector() *Result {
 	if len(b.names) != 0 {
 		return &Result{err: fmt.Errorf("name cannot be provided when a selector is specified")}
@@ -590,6 +620,7 @@ func (b *Builder) visitBySelector() *Result {
 	if len(b.resources) == 0 {
 		return &Result{err: fmt.Errorf("at least one resource must be specified to use a selector")}
 	}
+	//获得所有resourceRESTMapping
 	mappings, err := b.resourceMappings()
 	if err != nil {
 		return &Result{err: err}
@@ -597,11 +628,13 @@ func (b *Builder) visitBySelector() *Result {
 
 	visitors := []Visitor{}
 	for _, mapping := range mappings {
+		//获得RESTClient
 		client, err := b.mapper.ClientForMapping(mapping)
 		if err != nil {
 			return &Result{err: err}
 		}
 		selectorNamespace := b.namespace
+		//不是有namespace的资源
 		if mapping.Scope.Name() != meta.RESTScopeNameNamespace {
 			selectorNamespace = ""
 		}
@@ -613,6 +646,7 @@ func (b *Builder) visitBySelector() *Result {
 	return &Result{visitor: VisitorList(visitors), sources: visitors}
 }
 
+//
 func (b *Builder) visitByResource() *Result {
 	// if b.singular is false, this could be by default, so double-check length
 	// of resourceTuples to determine if in fact it is singular or not
@@ -681,6 +715,9 @@ func (b *Builder) visitByResource() *Result {
 	return &Result{singular: isSingular, visitor: visitors, sources: items}
 }
 
+//资源名
+//解析资源类型,获得RESTMapping,并转换成RESTClient...
+//注意这里直接旧创建了resource.Info(),其本身也是一个visitor
 func (b *Builder) visitByName() *Result {
 	isSingular := len(b.names) == 1
 
@@ -694,18 +731,21 @@ func (b *Builder) visitByName() *Result {
 		return &Result{singular: isSingular, err: fmt.Errorf("you must specify only one resource")}
 	}
 
+	//解析指定的resources获得RESTMapping
 	mappings, err := b.resourceMappings()
 	if err != nil {
 		return &Result{singular: isSingular, err: err}
 	}
 	mapping := mappings[0]
 
+	//获得RESTClient
 	client, err := b.mapper.ClientForMapping(mapping)
 	if err != nil {
 		return &Result{err: err}
 	}
 
 	selectorNamespace := b.namespace
+	//资源是无命名空间资源
 	if mapping.Scope.Name() != meta.RESTScopeNameNamespace {
 		selectorNamespace = ""
 	} else {
@@ -726,11 +766,16 @@ func (b *Builder) visitByName() *Result {
 	return &Result{singular: isSingular, visitor: VisitorList(visitors), sources: visitors}
 }
 
+//通过URL()/Stdin()/Path()/FilenameParam()指定了visitor
 func (b *Builder) visitByPaths() *Result {
+	//指定了一个资源文件
 	singular := !b.dir && !b.stream && len(b.paths) == 1
+
+	//不能够指定特定资源类型
 	if len(b.resources) != 0 {
 		return &Result{singular: singular, err: fmt.Errorf("when paths, URLs, or stdin is provided as input, you may not specify resource arguments as well")}
 	}
+	//不能够指定names
 	if len(b.names) != 0 {
 		return &Result{err: fmt.Errorf("name cannot be provided when a path is specified")}
 	}
@@ -740,8 +785,10 @@ func (b *Builder) visitByPaths() *Result {
 
 	var visitors Visitor
 	if b.continueOnError {
+		//visitor出错只记录,
 		visitors = EagerVisitorList(b.paths)
 	} else {
+		//有一个visitor出错则直接返回
 		visitors = VisitorList(b.paths)
 	}
 
@@ -767,25 +814,33 @@ func (b *Builder) visitByPaths() *Result {
 // The visitor will respect the error behavior specified by ContinueOnError. Note that stream
 // inputs are consumed by the first execution - use Infos() or Object() on the Result to capture a list
 // for further iteration.
+//根据不同的场景,将visitor转换成Result
 func (b *Builder) Do() *Result {
+	//根据不同的场景设置不同的Selector.
 	r := b.visitorResult()
+	//builder字段设置出现冲突
 	if r.err != nil {
 		return r
 	}
 	if b.flatten {
 		r.visitor = NewFlattenListVisitor(r.visitor, b.mapper)
 	}
+	//参观函数集
 	helpers := []VisitorFunc{}
+	//指定了default namespace
 	if b.defaultNamespace {
+		//添加SetNamespace函数
 		helpers = append(helpers, SetNamespace(b.namespace))
 	}
 	if b.requireNamespace {
 		helpers = append(helpers, RequireNamespace(b.namespace))
 	}
+	//添加FilterName
 	helpers = append(helpers, FilterNamespace)
 	if b.requireObject {
 		helpers = append(helpers, RetrieveLazy)
 	}
+	//新建一个装饰器
 	r.visitor = NewDecoratedVisitor(r.visitor, helpers...)
 	if b.continueOnError {
 		r.visitor = ContinueOnErrorVisitor{r.visitor}

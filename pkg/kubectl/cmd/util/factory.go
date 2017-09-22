@@ -155,6 +155,7 @@ type ClientAccessFactory interface {
 	// Pauser marks the object in the info as paused. Currently supported only for Deployments.
 	// Returns the patched object in bytes and any error that occured during the encoding or
 	// in case the object is already paused.
+	//??为什么会在这里出现处理resource.Info??
 	Pauser(info *resource.Info) ([]byte, error)
 	// Resumer resumes a paused object inside the info. Currently supported only for Deployments.
 	// Returns the patched object in bytes and any error that occured during the encoding or
@@ -198,7 +199,7 @@ type ObjectMappingFactory interface {
 	// Returns a RESTClient for working with the specified RESTMapping or an error. This is intended
 	// for working with arbitrary resources and is not guaranteed to point to a Kubernetes APIServer.
 	//实现了 k8s.io/kubernetes/pkg/kubectl/resource/interfaces.go ClientMapper
-	//非常重要,在转换resource到相应的http client.
+	//非常重要,在转换resource到相应的http request client.
 	ClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error)
 	// Returns a RESTClient for working with Unstructured objects.
 	UnstructuredClientForMapping(mapping *meta.RESTMapping) (resource.RESTClient, error) //这个的作用?
@@ -229,6 +230,7 @@ type ObjectMappingFactory interface {
 	// Returns a schema that can validate objects stored on disk.
 	Validator(validate bool, cacheDir string) (validation.Schema, error)
 	// SwaggerSchema returns the schema declaration for the provided group version kind.
+	//获得指定GVK的swagger api定义
 	SwaggerSchema(schema.GroupVersionKind) (*swagger.ApiDeclaration, error)
 }
 
@@ -271,8 +273,8 @@ func makeInterfacesFor(versionList []schema.GroupVersion) func(version schema.Gr
 //实现了Factory接口
 type factory struct {
 	ClientAccessFactory  //提供了从KUBE_CONFIG/--kubeconfig/$HOME/.kube/config等参数以及各种标志位获得k8s client api的接口
-	ObjectMappingFactory //用于转换资源对象?
-	BuilderFactory
+	ObjectMappingFactory //利用ClientAccessFactory的客户端,向服务端获得apigroup/version/resource数据,构建RESTMapper,用来处理runtimeObject的Scheme等
+	BuilderFactory       //生成Builder对象,根据请求利用RESTMapper/Scheme构建http请求,向apiserver进行请求资源创建/获取/更新嗯该.
 }
 
 // NewFactory creates a factory with the default Kubernetes resources defined

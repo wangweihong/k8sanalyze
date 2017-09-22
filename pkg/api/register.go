@@ -28,9 +28,11 @@ import (
 // extensions group instead. This Scheme is special and should appear ONLY in
 // the api group, unless you really know what you're doing.
 // TODO(lavalamp): make the above error impossible.
+//这个Scheme是静态的.只作用于pkg/api,不作用于其他pkg/apis
 var Scheme = runtime.NewScheme()
 
 // Codecs provides access to encoding and decoding for the scheme
+//和解析资源数据有关
 var Codecs = serializer.NewCodecFactory(Scheme)
 
 // GroupName is the group name use in this package
@@ -57,8 +59,10 @@ func Resource(resource string) schema.GroupResource {
 }
 
 var (
+	//SchemeBuilder是一个函数集,这里添加挨了addKnownTypes以及addDefaultFuncs到SchemeBuilder中
 	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes, addDefaultingFuncs)
-	AddToScheme   = SchemeBuilder.AddToScheme
+	//调用SchemeBuilder中所有的函数,对scheme进行调用
+	AddToScheme = SchemeBuilder.AddToScheme
 )
 
 func init() {
@@ -75,6 +79,7 @@ func init() {
 	}
 }
 
+//添加已知的类型到scheme中
 func addKnownTypes(scheme *runtime.Scheme) error {
 	if err := scheme.AddIgnoredConversionType(&metav1.TypeMeta{}, &metav1.TypeMeta{}); err != nil {
 		return err

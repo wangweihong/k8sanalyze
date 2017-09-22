@@ -26,6 +26,7 @@ import (
 )
 
 // Selector is a Visitor for resources that match a label selector.
+//见k8s.io/kubernetes/pkg/kubectl/resource/builder.go的visitBySelector()
 type Selector struct {
 	Client    RESTClient
 	Mapping   *meta.RESTMapping
@@ -46,7 +47,9 @@ func NewSelector(client RESTClient, mapping *meta.RESTMapping, namespace string,
 }
 
 // Visit implements Visitor
+//
 func (r *Selector) Visit(fn VisitorFunc) error {
+	//
 	list, err := NewHelper(r.Client, r.Mapping).List(r.Namespace, r.ResourceMapping().GroupVersionKind.GroupVersion().String(), r.Selector, r.Export)
 	if err != nil {
 		if errors.IsBadRequest(err) || errors.IsNotFound(err) {
